@@ -248,6 +248,10 @@ static void PM_Accelerate( vec3_t wishdir, float wishspeed, float accel ) {
 		return;
 	}
 	accelspeed = accel*pml.frametime*wishspeed;
+	// HEHE
+	//accelspeed *= 2;
+	accelspeed *= 1.618;
+
 	if (accelspeed > addspeed) {
 		accelspeed = addspeed;
 	}

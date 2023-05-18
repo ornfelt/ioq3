@@ -1,7 +1,9 @@
 {
   "ExpandedNodes": [
-    ""
+    "",
+    "\\code",
+    "\\code\\cgame"
   ],
-  "SelectedNode": "\\ioq3.sln (misc\\msvc12\\ioq3.sln)",
+  "SelectedNode": "\\code\\cgame\\cg_main.c",
   "PreviewInSolutionExplorer": false
 }
