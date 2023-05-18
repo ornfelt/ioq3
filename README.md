@@ -21,6 +21,8 @@ Nice map:
 
 Speedometer reference: https://github.com/cdev-tux/q3lite/commit/9680f69
 
+!You might need to copy the SDL2.dll file to the .exe dir in which case you can attempt to copy the one included in this repo.
+
 
 ![Build](https://github.com/ioquake/ioq3/workflows/Build/badge.svg)
 
