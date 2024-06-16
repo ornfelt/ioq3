@@ -128,17 +128,14 @@ For macOS, building a Universal Binary 2 (macOS 10.9+, arm64, x86_64)
 For Web, building with Emscripten
   1. Follow the installation instructions for the Emscripten SDK including
      setting up the environment with emsdk_env.
-  2. Copy or symlink your baseq3 directory into this directory so Emscripten
-     can package your game files. (Alternatively, you can build without this,
-     and provide the game data files at runtime. For this, game files should
-     be listed in `ioq3-config.json`)
-  3. Run `emmake make debug` (or release, but if you do both then you will
-     need to pass an extra URL parameter to the HTML file to select the
-     build you want).
+  2. Run `emmake make debug` (or release).
+  3. Copy or symlink your baseq3 pk3 files into the `build/debug-emscripten-wasm32/baseq3`
+     directory so they can be loaded at run-time. Only game files listed in
+     `client-config.json` will be loaded.
   4. Start a web server serving this directory. `python3 -m http.server`
      is an easy default that you may already have installed.
-  5. Open `code/web/ioquake3.html` in a web browser. Open the developer
-     console to see errors and warnings.
+  5. Open `http://localhost:8000/build/debug-emscripten-wasm32/ioquake3.html`
+     in a web browser. Open the developer console to see errors and warnings.
   6. Debugging the C code is possible using a Chrome extension. For details
      see https://developer.chrome.com/blog/wasm-debugging-2020
 
@@ -159,6 +156,8 @@ The following variables may be set, either on the command line or in
 Makefile.local:
 
 ```
+  DEPEND_MAKEFILE      - set to 0 to disable rebuilding all targets when
+                         the Makefile or Makefile.local is changed
   CFLAGS               - use this for custom CFLAGS
   V                    - set to show cc command line when building
   DEFAULT_BASEDIR      - extra path to search for baseq3 and such
@@ -172,6 +171,8 @@ Makefile.local:
   SERVERBIN            - rename 'ioq3ded' server binary
   CLIENTBIN            - rename 'ioquake3' client binary
   USE_RENDERER_DLOPEN  - build and use the renderer in a library
+  BUILD_RENDERER_OPENGL1 build the opengl1 client / renderer library
+  BUILD_RENDERER_OPENGL2 build the opengl2 client / renderer library
   USE_YACC             - use yacc to update code/tools/lcc/lburg/gram.c
   BASEGAME             - rename 'baseq3'
   BASEGAME_CFLAGS      - custom CFLAGS for basegame
@@ -199,6 +200,10 @@ Makefile.local:
   DEBUG_CFLAGS         - C compiler flags to use for building debug version
   COPYDIR              - the target installation directory
   TEMPDIR              - specify user defined directory for temp files
+  EMSCRIPTEN_PRELOAD_FILE - set to 1 to package 'baseq3' (BASEGAME) directory
+                            containing pk3s and loose files as a single
+                            .data file that is loaded instead of listing
+                            individual files in client-config.json
 ```
 
 The defaults for these variables differ depending on the target platform.
