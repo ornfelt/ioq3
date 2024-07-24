@@ -4,15 +4,17 @@ I use the following:
 
 /cg_fov 130
 
-/cg drawFPS 1
+/cg_drawFPS 1
 
-/cg drawSpeedometer 1
+/cg_drawSpeedometer 1
 
-/cg drawSpeedometer 2
+/cg_drawSpeedometer 2
 
 Run with:
 
 C:\Users\jonas\source\repos\ioq3\build\release-msvc142-x86\ioquake3.x86.exe +set sv_pure 0 +set vm_game 0 +set vm_cgame 0 +set vm_ui 0
+
+alias .ioq3='$HOME/Code2/C/ioq3/build/release-linux-x86_64/ioquake3.x86_64 +set sv_pure 0 +set vm_game 0 +set vm_cgame 0 +set vm_ui 0'
 
 In-game settings include change of crosshair and binding crouch to ctrl.
 
