@@ -13,7 +13,6 @@ option(BUILD_GAME_LIBRARIES "Build game module libraries" ON)
 option(BUILD_GAME_QVMS "Build game module qvms" ON)
 option(BUILD_STANDALONE "Build binaries for standalone games" OFF)
 
-option(USE_ARCHLESS_FILENAMES "Don't include the architecture in binary filenames" OFF)
 option(USE_RENDERER_DLOPEN "Dynamically load the renderer(s)" ON)
 option(USE_OPENAL "OpenAL audio" ON)
 option(USE_OPENAL_DLOPEN "Dynamically load OpenAL" ON)
@@ -41,18 +40,20 @@ set(CMAKE_C_STANDARD 99)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 set(CMAKE_SHARED_LIBRARY_PREFIX "")
 
-set(PRODUCT_VERSION "${CMAKE_PROJECT_VERSION}")
+if(NOT PRODUCT_VERSION)
+    set(PRODUCT_VERSION "${CMAKE_PROJECT_VERSION}")
 
-if(EXISTS "${CMAKE_SOURCE_DIR}/.git")
-    execute_process(
-        COMMAND git show -s --pretty=format:%h
-        WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
-        OUTPUT_VARIABLE GIT_REV
-        OUTPUT_STRIP_TRAILING_WHITESPACE
-        ERROR_QUIET)
+    if(EXISTS "${CMAKE_SOURCE_DIR}/.git")
+        execute_process(
+            COMMAND git show -s --pretty=format:%h
+            WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+            OUTPUT_VARIABLE GIT_REV
+            OUTPUT_STRIP_TRAILING_WHITESPACE
+            ERROR_QUIET)
 
-    if(GIT_REV)
-        set(PRODUCT_VERSION "${PRODUCT_VERSION}_g${GIT_REV}")
+        if(GIT_REV)
+            set(PRODUCT_VERSION "${PRODUCT_VERSION}_g${GIT_REV}")
+        endif()
     endif()
 endif()
 
@@ -60,6 +61,11 @@ add_compile_definitions(PRODUCT_VERSION="${PRODUCT_VERSION}")
 
 # For CI to read from
 file(GENERATE OUTPUT ${CMAKE_BINARY_DIR}/version.txt CONTENT ${PRODUCT_VERSION})
+
+if(DEFINED ENV{SOURCE_DATE_EPOCH})
+    string(TIMESTAMP PRODUCT_DATE "%b %d %Y" UTC)
+    add_compile_definitions(PRODUCT_DATE="${PRODUCT_DATE}")
+endif()
 
 set(SOURCE_DIR ${CMAKE_SOURCE_DIR}/code)
 

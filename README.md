@@ -118,8 +118,8 @@ For *nix,
   3. Install dependencies according to your operating system's instructions.  
      for apt-based systems, `sudo apt install cmake libsdl2-dev`
   4. `cmake -S . -B build -DCMAKE_BUILD_TYPE=Release`
-     `cmake --build build`
-  5. The resulting files will be in the `build` directory.
+  5. `cmake --build build`
+  6. The resulting files will be in the `build` directory.
 
 For Windows,
   1. Install Visual Studio Community Edition from Microsoft.
@@ -128,9 +128,8 @@ For Windows,
   3. Clone our git repository either using the command-line or a GUI tool:  
       `git clone git://github.com/ioquake/ioq3.git`
   4. Compile using Visual Studio by selecting our CMakeLists.txt and clicking Build.
-  5. Or using the command-line:  
-     `cmake -S . -B build -G "Visual Studio 17 2022"`
-     `cmake --build build --config Release`
+  5. Or using the command-line: `cmake -S . -B build -G "Visual Studio 17 2022"`
+  6. `cmake --build build --config Release`
 
 For macOS,
   1. Install XCode.
@@ -147,7 +146,7 @@ For Emscripten,
      setting up the environment with emsdk_env. https://emscripten.org/
   2. `git clone git://github.com/ioquake/ioq3.git`
   3. `cd ioq3`
-  4. `emcmake -S . -B build -DCMAKE_BUILD_TYPE=Release`
+  4. `emcmake cmake -S . -B build -DCMAKE_BUILD_TYPE=Release`
   5. `cmake --build build`
   3. Copy or symlink your baseq3 pk3 files into the `build/Release/baseq3`
      directory so they can be loaded at run-time. Only game files listed in
@@ -175,7 +174,6 @@ The following CMake variables may be set, using `-D` on the command line.
   BUILD_GAME_QVMS         - build the game qvms
   BUILD_STANDALONE        - build binaries suited for stand-alone games
 
-  USE_ARCHLESS_FILENAMES  - don't include the architecture in binary filenames
   USE_RENDERER_DLOPEN     - build and use the renderer in a library
   USE_OPENAL              - use OpenAL where available
   USE_OPENAL_DLOPEN       - link with OpenAL at runtime

@@ -1210,9 +1210,6 @@ void CL_ShutdownAll(qboolean shutdownRef)
 	if(clc.demorecording)
 		CL_StopRecord_f();
 
-#ifdef USE_HTTP
-	CL_HTTP_Shutdown();
-#endif
 	// clear sounds
 	S_DisableSounds();
 	// shutdown CGame
@@ -1345,7 +1342,7 @@ static void CL_UpdateGUID( const char *prefix, int prefix_len )
 	fileHandle_t f;
 	int len;
 
-	len = FS_SV_FOpenFileRead( QKEY_FILE, &f );
+	len = FS_BaseDir_FOpenFileRead( QKEY_FILE, &f );
 	FS_FCloseFile( f );
 
 	if( len != QKEY_SIZE ) 
@@ -2092,7 +2089,6 @@ void CL_DownloadsComplete( void ) {
 	// if we downloaded with HTTP
 	if(clc.httpUsed) {
 		clc.httpUsed = qfalse;
-		CL_HTTP_Shutdown();
 		if( clc.disconnectedForHttpDownload ) {
 			if(clc.downloadRestart) {
 				FS_Restart(clc.checksumFeed);
@@ -2201,7 +2197,7 @@ static void CL_BeginHttpDownload( const char *remoteURL ) {
 	CL_HTTP_BeginDownload(remoteURL);
 	Q_strncpyz(clc.downloadURL, remoteURL, sizeof(clc.downloadURL));
 
-	clc.download = FS_SV_FOpenFileWrite(clc.downloadTempName);
+	clc.download = FS_BaseDir_FOpenFileWrite(clc.downloadTempName);
 	if(!clc.download) {
 		Com_Error(ERR_DROP, "CL_BeginHTTPDownload: failed to open "
 			"%s for writing", clc.downloadTempName);
@@ -2237,8 +2233,7 @@ void CL_NextDownload(void)
 	// A download has finished, check whether this matches a referenced checksum
 	if(*clc.downloadName)
 	{
-		char *zippath = FS_BuildOSPath(Cvar_VariableString("fs_homepath"), clc.downloadName, "");
-		zippath[strlen(zippath)-1] = '\0';
+		char *zippath = FS_BaseDir_BuildOSPath(Cvar_VariableString("fs_homepath"), clc.downloadName);
 
 		if(!FS_CompareZipChecksum(zippath))
 			Com_Error(ERR_DROP, "Incorrect checksum for file: %s", clc.downloadName);
@@ -2982,7 +2977,7 @@ void CL_Frame ( int msec ) {
 				clc.download = 0;
 			}
 
-			FS_SV_Rename(clc.downloadTempName, clc.downloadName, qfalse);
+			FS_BaseDir_Rename(clc.downloadTempName, clc.downloadName, qfalse);
 			clc.downloadRestart = qtrue;
 			CL_NextDownload();
 		}
@@ -3126,7 +3121,7 @@ CL_RefPrintf
 DLL glue
 ================
 */
-static __attribute__ ((format (printf, 2, 3))) void QDECL CL_RefPrintf( int print_level, const char *fmt, ...) {
+static Q_PRINTF_FUNC(2, 3) void QDECL CL_RefPrintf( int print_level, const char *fmt, ...) {
 	va_list		argptr;
 	char		msg[MAXPRINTMSG];
 	
@@ -3254,12 +3249,6 @@ void CL_InitRef( void ) {
 #ifdef USE_RENDERER_DLOPEN
 	GetRefAPI_t		GetRefAPI;
 	char			dllName[MAX_OSPATH];
-
-#ifdef USE_ARCHLESS_FILENAMES
-#define RENDERER_ARCH_DLL_EXT ARCH_DLL_EXT
-#else
-#define RENDERER_ARCH_DLL_EXT "_" ARCH_DLL_EXT
-#endif
 #endif
 
 	Com_Printf( "----- Initializing Renderer ----\n" );
@@ -3267,14 +3256,14 @@ void CL_InitRef( void ) {
 #ifdef USE_RENDERER_DLOPEN
 	cl_renderer = Cvar_Get("cl_renderer", "opengl2", CVAR_ARCHIVE | CVAR_LATCH);
 
-	Com_sprintf(dllName, sizeof(dllName), "renderer_%s" RENDERER_ARCH_DLL_EXT, cl_renderer->string);
+	Com_sprintf(dllName, sizeof(dllName), "renderer_%s" DLL_EXT, cl_renderer->string);
 
 	if(!(rendererLib = Sys_LoadDll(dllName, qfalse)) && strcmp(cl_renderer->string, cl_renderer->resetString))
 	{
 		Com_Printf("failed:\n\"%s\"\n", Sys_LibraryError());
 		Cvar_ForceReset("cl_renderer");
 
-		Com_sprintf(dllName, sizeof(dllName), "renderer_%s" RENDERER_ARCH_DLL_EXT, cl_renderer->resetString);
+		Com_sprintf(dllName, sizeof(dllName), "renderer_%s" DLL_EXT, cl_renderer->resetString);
 		rendererLib = Sys_LoadDll(dllName, qfalse);
 	}
 
@@ -3467,7 +3456,7 @@ static void CL_GenerateQKey(void)
 	unsigned char buff[ QKEY_SIZE ];
 	fileHandle_t f;
 
-	len = FS_SV_FOpenFileRead( QKEY_FILE, &f );
+	len = FS_BaseDir_FOpenFileRead( QKEY_FILE, &f );
 	FS_FCloseFile( f );
 	if( len == QKEY_SIZE ) {
 		Com_Printf( "QKEY found.\n" );
@@ -3482,7 +3471,7 @@ static void CL_GenerateQKey(void)
 		Com_Printf( "QKEY building random string\n" );
 		Com_RandomBytes( buff, sizeof(buff) );
 
-		f = FS_SV_FOpenFileWrite( QKEY_FILE );
+		f = FS_BaseDir_FOpenFileWrite( QKEY_FILE );
 		if( !f ) {
 			Com_Printf( "QKEY could not open %s for write\n",
 				QKEY_FILE );
@@ -3797,6 +3786,10 @@ void CL_Shutdown(char *finalmsg, qboolean disconnect, qboolean quit)
 	
 	CL_ClearMemory(qtrue);
 	CL_Snd_Shutdown();
+
+#ifdef USE_HTTP
+	CL_HTTP_Shutdown();
+#endif
 
 	Cmd_RemoveCommand ("cmd");
 	Cmd_RemoveCommand ("configstrings");

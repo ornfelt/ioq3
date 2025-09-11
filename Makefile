@@ -243,10 +243,6 @@ ifndef USE_RENDERER_DLOPEN
 USE_RENDERER_DLOPEN=1
 endif
 
-ifndef USE_ARCHLESS_FILENAMES
-USE_ARCHLESS_FILENAMES=0
-endif
-
 ifndef USE_YACC
 USE_YACC=0
 endif
@@ -1067,21 +1063,11 @@ endif
 TARGETS =
 
 ifndef FULLBINEXT
-  ifeq ($(USE_ARCHLESS_FILENAMES),1)
-    FULLBINEXT=$(BINEXT)
-  else
-    FULLBINEXT=.$(ARCH)$(BINEXT)
-  endif
+  FULLBINEXT=$(BINEXT)
 endif
 
 ifndef SHLIBNAME
-  ifeq ($(USE_ARCHLESS_FILENAMES),1)
-    SHLIBNAME=.$(SHLIBEXT)
-    RSHLIBNAME=$(SHLIBNAME)
-  else
-    SHLIBNAME=$(ARCH).$(SHLIBEXT)
-    RSHLIBNAME=_$(SHLIBNAME)
-  endif
+  SHLIBNAME=.$(SHLIBEXT)
 endif
 
 ifneq ($(BUILD_SERVER),0)
@@ -1093,10 +1079,10 @@ ifneq ($(BUILD_CLIENT),0)
     TARGETS += $(B)/$(CLIENTBIN)$(FULLBINEXT)
 
     ifneq ($(BUILD_RENDERER_OPENGL1),0)
-      TARGETS += $(B)/renderer_opengl1$(RSHLIBNAME)
+      TARGETS += $(B)/renderer_opengl1$(SHLIBNAME)
     endif
     ifneq ($(BUILD_RENDERER_OPENGL2),0)
-      TARGETS += $(B)/renderer_opengl2$(RSHLIBNAME)
+      TARGETS += $(B)/renderer_opengl2$(SHLIBNAME)
     endif
   else
     ifneq ($(BUILD_RENDERER_OPENGL1),0)
@@ -1318,10 +1304,6 @@ ifeq ($(BUILD_STANDALONE),1)
   BASE_CFLAGS += -DSTANDALONE
 endif
 
-ifeq ($(USE_ARCHLESS_FILENAMES),1)
-  BASE_CFLAGS += -DUSE_ARCHLESS_FILENAMES
-endif
-
 ifeq ($(GENERATE_DEPENDENCIES),1)
   DEPEND_CFLAGS = -MMD
 else
@@ -1530,7 +1512,7 @@ else
   print_wrapped=$(print_list)
 endif
 
-REQUIRE_DEPRECATION_ACK=0
+REQUIRE_DEPRECATION_ACK=1
 
 # Create the build directories, check libraries and print out
 # an informational message, then start building
@@ -1546,7 +1528,7 @@ ifneq ($(I_ACKNOWLEDGE_THE_MAKEFILE_IS_DEPRECATED),1)
 	@echo "  For more information please read the following "
 	@echo "  ioquake3 news post:"
 	@echo ""
-	@echo "    https://ioquake3.org/news/"
+	@echo "https://ioquake3.org/ioquake3/breaking-changes-ioquake3-switching-to-cmake-makefile-deprecated/"
 	@echo ""
 	@echo "    If you are a developer who uses ioquake3 for your project, please read and"
 	@echo "    comment on this GitHub issue:"
@@ -2172,8 +2154,6 @@ endif
 
 ifeq ($(ARCH),x86)
   Q3OBJ += \
-    $(B)/client/snd_mixa.o \
-    $(B)/client/matha.o \
     $(B)/client/snapvector.o \
     $(B)/client/ftola.o
 endif
@@ -2420,12 +2400,12 @@ $(B)/$(CLIENTBIN)$(FULLBINEXT): $(Q3OBJ) $(LIBSDLMAIN)
 		-o $@ $(Q3OBJ) \
 		$(LIBSDLMAIN) $(CLIENT_LIBS) $(LIBS)
 
-$(B)/renderer_opengl1$(RSHLIBNAME): $(Q3ROBJ) $(JPGOBJ)
+$(B)/renderer_opengl1$(SHLIBNAME): $(Q3ROBJ) $(JPGOBJ)
 	$(echo_cmd) "LD $@"
 	$(Q)$(CC) $(CFLAGS) $(SHLIBLDFLAGS) -o $@ $(Q3ROBJ) $(JPGOBJ) \
 		$(THREAD_LIBS) $(LIBSDLMAIN) $(RENDERER_LIBS) $(LIBS)
 
-$(B)/renderer_opengl2$(RSHLIBNAME): $(Q3R2OBJ) $(Q3R2STRINGOBJ) $(JPGOBJ)
+$(B)/renderer_opengl2$(SHLIBNAME): $(Q3R2OBJ) $(Q3R2STRINGOBJ) $(JPGOBJ)
 	$(echo_cmd) "LD $@"
 	$(Q)$(CC) $(CFLAGS) $(SHLIBLDFLAGS) -o $@ $(Q3R2OBJ) $(Q3R2STRINGOBJ) $(JPGOBJ) \
 		$(THREAD_LIBS) $(LIBSDLMAIN) $(RENDERER_LIBS) $(LIBS)
@@ -2534,7 +2514,6 @@ Q3DOBJ = \
 
 ifeq ($(ARCH),x86)
   Q3DOBJ += \
-      $(B)/ded/matha.o \
       $(B)/ded/snapvector.o \
       $(B)/ded/ftola.o
 endif
@@ -2881,7 +2860,7 @@ $(B)/$(MISSIONPACK)/vm/ui.qvm: $(MPUIVMOBJ) $(UIDIR)/ui_syscalls.asm $(Q3ASM)
 ## CLIENT/SERVER RULES
 #############################################################################
 
-$(B)/client/%.o: $(ASMDIR)/%.s
+$(B)/client/%.o: $(ASMDIR)/%.S
 	$(DO_AS)
 
 # k8 so inline assembler knows about SSE
@@ -2980,7 +2959,7 @@ $(B)/renderergl2/%.o: $(RGL2DIR)/%.c
 	$(DO_REF_CC)
 
 
-$(B)/ded/%.o: $(ASMDIR)/%.s
+$(B)/ded/%.o: $(ASMDIR)/%.S
 	$(DO_AS)
 
 # k8 so inline assembler knows about SSE
@@ -3150,10 +3129,10 @@ ifneq ($(BUILD_CLIENT),0)
   ifneq ($(USE_RENDERER_DLOPEN),0)
 	$(INSTALL) $(STRIP_FLAG) -m 0755 $(BR)/$(CLIENTBIN)$(FULLBINEXT) $(COPYBINDIR)/$(CLIENTBIN)$(FULLBINEXT)
     ifneq ($(BUILD_RENDERER_OPENGL1),0)
-	$(INSTALL) $(STRIP_FLAG) -m 0755 $(BR)/renderer_opengl1$(RSHLIBNAME) $(COPYBINDIR)/renderer_opengl1$(RSHLIBNAME)
+	$(INSTALL) $(STRIP_FLAG) -m 0755 $(BR)/renderer_opengl1$(SHLIBNAME) $(COPYBINDIR)/renderer_opengl1$(SHLIBNAME)
     endif
     ifneq ($(BUILD_RENDERER_OPENGL2),0)
-	$(INSTALL) $(STRIP_FLAG) -m 0755 $(BR)/renderer_opengl2$(RSHLIBNAME) $(COPYBINDIR)/renderer_opengl2$(RSHLIBNAME)
+	$(INSTALL) $(STRIP_FLAG) -m 0755 $(BR)/renderer_opengl2$(SHLIBNAME) $(COPYBINDIR)/renderer_opengl2$(SHLIBNAME)
     endif
   else
     ifneq ($(BUILD_RENDERER_OPENGL1),0)
