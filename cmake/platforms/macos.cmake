@@ -19,7 +19,7 @@ set(CMAKE_OSX_ARCHITECTURES arm64;x86_64)
 
 if(BUILD_MACOS_APP)
     set(CLIENT_EXECUTABLE_OPTIONS MACOSX_BUNDLE)
-    set(POST_CLIENT_CONFIGURE_FUNCTION finish_macos_app)
+    list(APPEND POST_CONFIGURE_FUNCTIONS finish_macos_app)
 endif()
 
 function(finish_macos_app)
@@ -67,10 +67,51 @@ function(finish_macos_app)
 
         if(BUILD_RENDERER_GL1)
             set_output_dirs(${RENDERER_GL1_BINARY} SUBDIRECTORY ${MACOS_APP_BINARY_DIR})
+            add_dependencies(${CLIENT_BINARY} ${RENDERER_GL1_BINARY})
         endif()
 
         if(BUILD_RENDERER_GL2)
             set_output_dirs(${RENDERER_GL2_BINARY} SUBDIRECTORY ${MACOS_APP_BINARY_DIR})
+            add_dependencies(${CLIENT_BINARY} ${RENDERER_GL2_BINARY})
         endif()
     endif()
 endfunction()
+
+if(NOT "$ENV{APPLE_CERTIFICATE_ID}" STREQUAL "")
+    list(APPEND POST_CONFIGURE_FUNCTIONS codesign)
+
+    function(codesign)
+        set(DEV_ID "Developer ID Application")
+
+        get_directory_property(INSTALL_TARGETS DIRECTORY
+            ${CMAKE_SOURCE_DIR} BUILDSYSTEM_TARGETS)
+
+        # Code sign everything that will be installed
+        foreach(TARGET IN LISTS INSTALL_TARGETS)
+            get_target_property(DESTINATION ${TARGET} INSTALL_DESTINATION)
+            if(NOT DESTINATION)
+                continue()
+            endif()
+
+            add_custom_command(TARGET ${TARGET} POST_BUILD
+                COMMAND codesign --force --deep --options runtime
+                    --sign "$ENV{APPLE_CERTIFICATE_ID}"
+                    "$<TARGET_FILE:${TARGET}>"
+                COMMENT "Code Signing for macOS: $<TARGET_FILE_BASE_NAME:${TARGET}>")
+        endforeach()
+    endfunction()
+endif()
+
+set(CPACK_GENERATOR "DragNDrop")
+
+set(CPACK_DMG_VOLUME_NAME "${PROJECT_NAME} Installer")
+set(CPACK_DMG_BACKGROUND_IMAGE "${CMAKE_SOURCE_DIR}/misc/macos-dmg-background.png")
+set(CPACK_DMG_SUBDIRECTORY "${CLIENT_NAME}")
+
+configure_file(
+  "${CMAKE_SOURCE_DIR}/misc/macos-dmg-setup.applescript.in"
+  "${CMAKE_BINARY_DIR}/macos-dmg-setup.applescript"
+  @ONLY
+)
+
+set(CPACK_DMG_DS_STORE_SETUP_SCRIPT "${CMAKE_BINARY_DIR}/macos-dmg-setup.applescript")

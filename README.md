@@ -71,11 +71,17 @@ The original id software readme that accompanied the Q3 source release has been
 renamed to id-readme.txt so as to prevent confusion. Please refer to the
 website for updated status.
 
-More documentation including a Player's Guide and Sysadmin Guide are on:
-https://ioquake3.org/help/
+## Just want to play ioquake3?
+Check out our Player's Guide here:
+https://ioquake3.org/help/players-guide/
 
+## Want to run a server?
+Our SysAdmin guide is here:
+https://ioquake3.org/help/sys-admin-guide/
+
+## Visit our forums
 If you've got issues that you aren't sure are worth filing as bugs, or just
-want to chat, please visit our forums:
+want to chat:
 https://discourse.ioquake.org
 
 # Thank You:
@@ -107,6 +113,9 @@ https://discourse.ioquake.org
 **Note that for all of these platforms, if you want to play _Quake 3: Arena_ or 
 the expansion pack, _Team Arena_, you'll still need to buy a copy of the game.**
 The _Quake 3_ game source code is freely available under the GPLv2, not the game data.
+
+You can get links to buy and support the project here: https://ioquake3.org/buy/
+
 
 You can make your own mod that either requires the original game data or a new game  
 that does not. Please read the **Creating standalone games** section for more information
@@ -595,12 +604,15 @@ See opengl2-readme.md for more information.
 
 Maintainers
 
+  * Tim Angus <tim@ngus.net>
+  * Jack "Mr. Nuclear Monster" Slater <jack@ioquake.org>
+
+Former Maintainers
+
   * James Canete <use.less01@gmail.com>
   * Ludwig Nussel <ludwig.nussel@suse.de>
   * Thilo Schulz <arny@ats.s.bawue.de>
-  * Tim Angus <tim@ngus.net>
   * Tony J. White <tjw@tjw.org>
-  * Jack "Mr. Nuclear Monster" Slater <jack@ioquake.org>
   * Zack Middleton <zturtleman@gmail.com>
 
 Significant contributions from
