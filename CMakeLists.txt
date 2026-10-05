@@ -28,6 +28,7 @@ option(USE_CODEC_OPUS "Ogg Opus support" ON)
 option(USE_VOIP "Voice chat" ON)
 option(USE_MUMBLE "Mumble support" ON)
 option(USE_FREETYPE "Freetype font rendering" OFF)
+option(USE_CUSTOM_CHANGES "Enable custom changes (speedometer, strafe acceleration)" ON)
 
 option(USE_INTERNAL_LIBS "Use internally packaged libraries" ON)
 option(USE_INTERNAL_SDL "Use internal SDL binary (if available)" ${USE_INTERNAL_LIBS})
@@ -81,6 +82,10 @@ if(NOT PRODUCT_VERSION)
 endif()
 
 add_compile_definitions(PRODUCT_VERSION="${PRODUCT_VERSION}")
+
+if(USE_CUSTOM_CHANGES)
+    add_compile_definitions(USE_CUSTOM_CHANGES)
+endif()
 
 # For CI to read from
 file(GENERATE OUTPUT ${CMAKE_BINARY_DIR}/version.txt CONTENT ${PRODUCT_VERSION})

@@ -487,8 +487,10 @@ typedef struct {
 
 	qboolean	renderingThirdPerson;		// during deaths, chasecams, etc
 
+#ifdef USE_CUSTOM_CHANGES
 	qboolean	playerPredicted;
 	centity_t	*playerCent;
+#endif
 
 	// prediction state
 	qboolean	hyperspace;				// true if prediction has hit a trigger_teleport
@@ -1181,7 +1183,9 @@ extern	vmCvar_t		cg_oldRail;
 extern	vmCvar_t		cg_oldRocket;
 extern	vmCvar_t		cg_oldPlasma;
 extern	vmCvar_t		cg_trueLightning;
+#ifdef USE_CUSTOM_CHANGES
 extern	vmCvar_t		cg_drawSpeedometer;
+#endif
 #ifdef MISSIONPACK
 extern	vmCvar_t		cg_redTeamName;
 extern	vmCvar_t		cg_blueTeamName;

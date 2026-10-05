@@ -794,6 +794,7 @@ static float CG_DrawTimer( float y ) {
 	return y + BIGCHAR_HEIGHT + 4;
 }
 
+#ifdef USE_CUSTOM_CHANGES
 /*
 ==================
 CG_DrawSpeedometer
@@ -819,6 +820,7 @@ static float CG_DrawSpeedometer( float y ) {
 	return y + BIGCHAR_HEIGHT + 4;
 
 }
+#endif
 
 /*
 =================
@@ -1018,9 +1020,11 @@ static void CG_DrawUpperRight(stereoFrame_t stereoFrame)
 	if ( cg_drawTimer.integer ) {
 		y = CG_DrawTimer( y );
 	}
+#ifdef USE_CUSTOM_CHANGES
 	if ( cg_drawSpeedometer.integer ) {
 		y = CG_DrawSpeedometer( y );
 	}
+#endif
 	if ( cg_drawAttacker.integer ) {
 		CG_DrawAttacker( y );
 	}
