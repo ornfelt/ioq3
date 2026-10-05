@@ -248,12 +248,6 @@ static void PM_Accelerate( vec3_t wishdir, float wishspeed, float accel ) {
 		return;
 	}
 	accelspeed = accel*pml.frametime*wishspeed;
-#ifdef USE_CUSTOM_CHANGES
-	// HEHE
-	//accelspeed *= 2;
-	accelspeed *= 1.618;
-#endif
-
 	if (accelspeed > addspeed) {
 		accelspeed = addspeed;
 	}
@@ -639,7 +633,13 @@ static void PM_AirMove( void ) {
 	wishspeed *= scale;
 
 	// not on ground, so little effect on velocity
+#ifdef USE_CUSTOM_CHANGES
+	// HEHE
+	//PM_Accelerate (wishdir, wishspeed, pm_airaccelerate * 2);
+	PM_Accelerate (wishdir, wishspeed, pm_airaccelerate * 1.618f);
+#else
 	PM_Accelerate (wishdir, wishspeed, pm_airaccelerate);
+#endif
 
 	// we may have a ground plane that is very steep, even
 	// though we don't have a groundentity
