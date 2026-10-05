@@ -325,7 +325,7 @@ static cvarTable_t cvarTable[] = {
 	{ &cg_oldPlasma, "cg_oldPlasma", "1", CVAR_ARCHIVE},
 	{ &cg_trueLightning, "cg_trueLightning", "0.0", CVAR_ARCHIVE},
 #ifdef USE_CUSTOM_CHANGES
-	{ &cg_drawSpeedometer, "cg_drawSpeedometer", "0", CVAR_ARCHIVE}
+	{ &cg_drawSpeedometer, "cg_drawSpeedometer", "1", CVAR_ARCHIVE}
 #endif
 //	{ &cg_pmove_fixed, "cg_pmove_fixed", "0", CVAR_USERINFO | CVAR_ARCHIVE }
 };
