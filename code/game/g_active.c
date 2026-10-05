@@ -920,6 +920,9 @@ void ClientThink_real( gentity_t *ent ) {
 
 	pm.pmove_fixed = pmove_fixed.integer | client->pers.pmoveFixed;
 	pm.pmove_msec = pmove_msec.integer;
+#ifdef USE_CUSTOM_CHANGES
+	pm.customMovement = client->pers.localClient;
+#endif
 
 	VectorCopy( client->ps.origin, client->oldOrigin );
 

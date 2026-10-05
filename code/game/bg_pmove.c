@@ -636,7 +636,7 @@ static void PM_AirMove( void ) {
 #ifdef USE_CUSTOM_CHANGES
 	// HEHE
 	//PM_Accelerate (wishdir, wishspeed, pm_airaccelerate * 2);
-	PM_Accelerate (wishdir, wishspeed, pm_airaccelerate * 1.618f);
+	PM_Accelerate (wishdir, wishspeed, pm->customMovement ? pm_airaccelerate * 1.618f : pm_airaccelerate);
 #else
 	PM_Accelerate (wishdir, wishspeed, pm_airaccelerate);
 #endif
