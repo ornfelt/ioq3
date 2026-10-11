@@ -1,0 +1,42 @@
+in 0 vec3 aPos
+in 1 vec4 aColor
+in 2 vec2 aTexCoord0
+in 3 vec2 aTexCoord1
+
+out 0 vec4 vColor
+out 1 vec2 vTexCoord0
+out 2 vec2 vTexCoord1
+out 3 float vClipDist
+
+constant 0 Uniforms
+{
+	mat4 uMVP
+	vec4 uParams
+	vec4 uClipPlane
+	vec4 uDepth
+}
+
+// generic.vs - renderer_gfx's one vertex shader (no C counterpart: it stands for the GL fixed
+// function vertex path renderergl1 draws with). tr_shade computes colors and texture coordinates
+// on the CPU, so this only transforms the position by GL's projection * modelview (uploaded
+// column-major, as glLoadMatrixf takes it) and passes the rest on. uParams belongs to the
+// fragment shader (see generic.fs.gfxs); the block is shared so one bind serves both.
+// Two things GL's rasterizer does that gfx has no state for are done here: glPolygonOffset as a
+// constant depth bias (uDepth.x, in normalized device depth, 0 when off), and GL_CLIP_PLANE0 as
+// the distance to uClipPlane (the plane in the coordinates of aPos; (0, 0, 0, 1) when off), which
+// the fragment shader discards below 0.
+// The projection is GL's (z in [-w, w]); on a device whose clip space keeps z in [0, w] (D3D,
+// Vulkan; uDepth.y = 1) z becomes (z + w) / 2, after the bias, so the same depth values come out.
+
+vs_output gfx_main(vs_input gfx_in)
+{
+	vs_output gfx_out;
+	gfx_out.gfx_position = mul(vec4(gfx_in.aPos, 1.0), uMVP);
+	gfx_out.gfx_position.z += uDepth.x * gfx_out.gfx_position.w;
+	gfx_out.gfx_position.z = mix(gfx_out.gfx_position.z, (gfx_out.gfx_position.z + gfx_out.gfx_position.w) * 0.5, uDepth.y);
+	gfx_out.vClipDist = dot(uClipPlane, vec4(gfx_in.aPos, 1.0));
+	gfx_out.vColor = gfx_in.aColor;
+	gfx_out.vTexCoord0 = gfx_in.aTexCoord0;
+	gfx_out.vTexCoord1 = gfx_in.aTexCoord1;
+	return gfx_out;
+}

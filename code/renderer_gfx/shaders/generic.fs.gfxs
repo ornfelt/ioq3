@@ -1,0 +1,58 @@
+in 0 vec4 vColor
+in 1 vec2 vTexCoord0
+in 2 vec2 vTexCoord1
+in 3 float vClipDist
+
+out 0 vec4 FragColor
+
+constant 0 Uniforms
+{
+	mat4 uMVP
+	vec4 uParams
+	vec4 uClipPlane
+	vec4 uDepth
+}
+
+sampler 0 2d uTexture0
+sampler 1 2d uTexture1
+
+// generic.fs - renderer_gfx's one fragment shader (no C counterpart: it stands for GL's fixed
+// function fragment path renderergl1 draws with). Fragments behind GL_CLIP_PLANE0 (vClipDist < 0,
+// generic.vs.gfxs) are discarded first. Then GL's texture environments, unit by unit, on the
+// vertex color: uParams.z for unit 0, uParams.w for unit 1 (GL_ARB_multitexture, the lightmap pass
+// of tr_shade's DrawMultitextured) - -1 the unit is off, 0 GL_MODULATE, 1 GL_REPLACE, 2 GL_DECAL,
+// 3 GL_ADD. Last GL's alpha test: uParams.x 0 off, 1 GL_GREATER, 2 GL_LESS, 3 GL_GEQUAL against
+// uParams.y. Every draw uses this one program (an unused unit samples a white texture), so passes
+// drawn with depthFunc GL_EQUAL (dynamic lights, multi-stage shaders) run the same vertex code as
+// the pass that wrote the depth: GLSL does not promise equal positions across programs.
+
+vec4 tex_env(vec4 prev, vec4 tex, float mode)
+{
+	if (mode == 1.0)
+		return tex;
+	if (mode == 2.0)
+		return vec4(mix(prev.rgb, tex.rgb, tex.a), prev.a);
+	if (mode == 3.0)
+		return vec4(min(prev.rgb + tex.rgb, vec3(1.0, 1.0, 1.0)), prev.a * tex.a);
+	return prev * tex;
+}
+
+fs_output gfx_main(fs_input gfx_in)
+{
+	fs_output gfx_out;
+	if (gfx_in.vClipDist < 0.0)
+		discard;
+	vec4 color = gfx_in.vColor;
+	if (uParams.z >= 0.0)
+		color = tex_env(color, gfx_sample(uTexture0, gfx_in.vTexCoord0), uParams.z);
+	if (uParams.w >= 0.0)
+		color = tex_env(color, gfx_sample(uTexture1, gfx_in.vTexCoord1), uParams.w);
+	if (uParams.x == 1.0 && color.a <= uParams.y)
+		discard;
+	if (uParams.x == 2.0 && color.a >= uParams.y)
+		discard;
+	if (uParams.x == 3.0 && color.a < uParams.y)
+		discard;
+	gfx_out.FragColor = color;
+	return gfx_out;
+}

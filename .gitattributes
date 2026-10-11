@@ -1,0 +1,2 @@
+# renderer_gfx's compiled gfx shaders: their code blobs sit at fixed offsets
+*.gfx binary

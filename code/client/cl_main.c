@@ -31,6 +31,10 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #include "libmumblelink.h"
 #endif
 
+#ifdef USE_GFX
+#include "../renderer_gfx/gfx_public.h"
+#endif
+
 #ifdef USE_MUMBLE
 cvar_t	*cl_useMumble;
 cvar_t	*cl_mumbleScale;
@@ -3258,6 +3262,32 @@ void CL_InitRef( void ) {
 	Com_Printf( "----- Initializing Renderer ----\n" );
 
 #ifdef USE_RENDERER_DLOPEN
+#ifdef USE_GFX
+	// renderer_gfx is linked into the client and the default; the GL renderers stay dlls
+	cl_renderer = Cvar_Get("cl_renderer", GFX_RENDERER_NAME, CVAR_ARCHIVE | CVAR_LATCH);
+
+	if ( !Q_stricmp( cl_renderer->string, GFX_RENDERER_NAME ) ) {
+		GetRefAPI = GfxGetRefAPI;
+	} else {
+		Com_sprintf(dllName, sizeof(dllName), "renderer_%s" DLL_EXT, cl_renderer->string);
+
+		if(!(rendererLib = Sys_LoadDll(dllName, qfalse)))
+		{
+			Com_Printf("failed:\n\"%s\"\n", Sys_LibraryError());
+			Com_Printf("using the built-in renderer_gfx\n");
+			Cvar_ForceReset("cl_renderer");
+			GetRefAPI = GfxGetRefAPI;
+		}
+		else
+		{
+			GetRefAPI = Sys_LoadFunction(rendererLib, "GetRefAPI");
+			if(!GetRefAPI)
+			{
+				Com_Error(ERR_FATAL, "Can't load symbol GetRefAPI: '%s'",  Sys_LibraryError());
+			}
+		}
+	}
+#else
 	cl_renderer = Cvar_Get("cl_renderer", "opengl2", CVAR_ARCHIVE | CVAR_LATCH);
 
 	Com_sprintf(dllName, sizeof(dllName), "renderer_%s" DLL_EXT, cl_renderer->string);
@@ -3282,6 +3312,7 @@ void CL_InitRef( void ) {
 	{
 		Com_Error(ERR_FATAL, "Can't load symbol GetRefAPI: '%s'",  Sys_LibraryError());
 	}
+#endif
 #endif
 
 	ri.Cmd_AddCommand = Cmd_AddCommand;

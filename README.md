@@ -23,6 +23,28 @@ Speedometer reference: https://github.com/cdev-tux/q3lite/commit/9680f69
 
 !You might need to copy the SDL2.dll file to the .exe dir in which case you can attempt to copy the one included in this repo.
 
+## gfx
+
+On the `gfx` branch the client is being moved onto the gfx library
+(`$code_root_dir/Code2/General/gfx/gfx_dll/gfx`, compiled from source as a static library - no
+gfx.dll), so that it draws, opens its window and reads its input through gfx. The `USE_GFX` CMake option (on by default) builds it with `renderer_gfx`,
+a renderer linked into `ioquake3`; `-DUSE_GFX=OFF` builds what `main` builds. `GFX_DIR` points
+at another gfx tree. Progress, decisions and gfx gaps are in [GFX_STATUS.md](GFX_STATUS.md).
+
+```powershell
+cmake -S . -B build_gfx -G "Visual Studio 18 2026" -A x64          # USE_GFX on
+cmake --build build_gfx --config RelWithDebInfo
+cmake -S . -B build_nogfx -G "Visual Studio 18 2026" -A x64 -DUSE_GFX=OFF
+cmake --build build_nogfx --config RelWithDebInfo
+```
+
+`cl_renderer gfx` (the default with `USE_GFX`) uses renderer_gfx, `cl_renderer opengl1` /
+`opengl2` load the GL renderer dlls as before. `r_gfxDevice` (`gl3`, `gl4` - the default,
+`gles3`, `vk`, `d3d11`, `d3d12`) and `r_gfxWindow` (`sdl` - the default, `glfw`, `win32`, `x11`)
+pick the gfx backends; both are latched, so `vid_restart` applies them, and a backend the gfx
+build lacks falls back to the default. The compiled shaders are copied next to the client as
+`shaders/<dialect>/`; `code/renderer_gfx/shaders/generate_shaders.ps1` / `.sh` regenerate them.
+
 
 ![Build](https://github.com/ioquake/ioq3/workflows/Build/badge.svg)
 
