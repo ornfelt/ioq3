@@ -41,6 +41,8 @@ set(RENDERER_GFX_SOURCES
     ${SOURCE_DIR}/renderer_gfx/tr_world.c
     ${SOURCE_DIR}/renderer_gfx/gfx_glimp.c
     ${SOURCE_DIR}/renderer_gfx/gfx_gl.c
+    ${SOURCE_DIR}/renderer_gfx/gfx_draw.c
+    ${SOURCE_DIR}/renderer_gfx/gfx_shader.c
 )
 
 set(RENDERER_GFX_BINARY renderer_gfx)

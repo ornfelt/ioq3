@@ -6,24 +6,22 @@ Work happens on the `gfx` branch; `main` stays the plain fork. The design follow
 finished renderer_gfx (`$code_root_dir/Code2/Rust/ioq3-rs`, `gfx` branch, its `GFX_STATUS.md`).
 This file is the current snapshot; the history is in git.
 
-**Last run:** phase 2. The client's keyboard, text, mouse and window events come from the gfx
-window: new `code/gfx/gfx_input.c` / `.h` (the port of ioq3-rs's `gfx_input.rs`) queue gfx's
-events in a fixed ring and hand them to the client as the SDL path does; `sdl_input.c` dispatches
-IN_ProcessEvents, IN_ActivateMouse / IN_DeactivateMouse, IN_Frame's focus test and IN_Init to it
-while `GfxGLimp_GetWindow()` is not NULL. Checked on gl4 (RelWithDebInfo, q3dm1) with injected
-input (keybd_event with scancodes, mouse_event) on the sdl, glfw and win32 windows: binds (F5,
-MOUSE2, MOUSE4 from X1, MWHEELUP), console typing and Enter, the console key (win32 / glfw),
-10 relative mouse moves (`cl_showMouseRate`), a held Shift released on focus loss, WM_CLOSE as
-`quit Closed window`, and the same after `vid_restart` from win32 to glfw; `cl_renderer opengl1`
-still reads SDL's input, and `USE_GFX=OFF` builds.
+**Last run:** phase 3. renderer_gfx draws through gfx: new `gfx_draw.c` / `.h` (the one program,
+vertex / index / uniform rings, the pipeline-key cache, bind caching, draw submission),
+`gfx_shader.c` / `.h` (the `.gfx` loader), and `gfx_gl.c`'s texture staging and upload,
+glTexSubImage2D, glDrawElements / glArrayElement / glBegin..glEnd, clears through a bound
+pipeline, the uniforms. It ports ioq3-rs's final design (after its phases 4-6), not its phase 3,
+so polygon offset, the clip plane and the D3D / Vulkan depth remap are already in the uniforms.
+Checked on gl4 (RelWithDebInfo, windowed r_mode 4, screenshots against renderer_opengl1 with
+`r_ignorehwgamma 1`): the CD key menu, the console with its fonts, the main menu, a cinematic
+(`cinematic idlogo.RoQ`), the in-game menu over q3dm1 and q3dm1's first view all match; the main
+menu after `vid_restart` from sdl to win32 to glfw draws on each; `USE_GFX=OFF` builds.
 
-**Next:** phase 3 - 2D. `gfx_draw.c` / `.h` (programs, vertex / index / uniform rings, the
-pipeline-key cache, draw submission), `gfx_shader.c` (loading `shaders/<dialect>/*.gfx` next to
-the client), `gfx_gl.c`'s texture staging and upload (formats, mipmaps, picmip, texture modes,
-glTexSubImage2D for cinematics), glDrawElements / glBegin..glEnd through the generic program,
-clears through a bound pipeline so they obey GL's masks. Read ioq3-rs's phase 3 commit
-(`82b20ed`), `gfx_draw.rs`, `gfx_gl.rs`, `gfx_shader.rs` and its "Shaders" / "Draws" decisions
-first. Checkpoint: console and menus on gl4; start `GFX_TESTING.md`.
+**Next:** phase 4 - 3D checks, as most of the 3D code came with phase 3: q3dm1 with bots (a full
+game), q3dm0's mirror and portal camera (`setviewpos -1148 -1100 30 270`, `-1152 -1700 30 270`),
+q3dm12 fog, dynamic lights (rocket / plasma), marks and blob shadows, sky, md3 / iqm models,
+`r_primitives 1` / `3`, `screenshotJPEG` and video capture - each against renderer_opengl1 on gl4;
+fix what differs. ioq3-rs's phase 4 commit (`ab3f73c`) and its testing notes list the views.
 
 ## Phases
 
@@ -47,15 +45,17 @@ first. Checkpoint: console and menus on gl4; start `GFX_TESTING.md`.
   events taken before gfx polls, `IN_IsConsoleKey` shared); `gfx_glimp.c` (gfx's raw-input
   no-motion error to the developer console); README.
   Checkpoint: keys, text, mouse, focus, close on the sdl, glfw and win32 windows - done.
-- [ ] **3. 2D** - `gfx_draw.c` / `.h` (programs, rings, pipeline-key cache, draw submission),
-  `gfx_shader.c` (loading `shaders/<dialect>/*.gfx`), `gfx_gl.c` (texture staging and upload,
-  glTexSubImage2D, glDrawElements / glArrayElement / glBegin..glEnd, clears through a bound
-  pipeline so they obey GL's masks). Checkpoint: console and menus on gl4; `GFX_TESTING.md`
-  from here on.
-- [ ] **4. 3D** - polygon offset and clip plane as uniforms, the one generic program, bind
-  caching, world / curves / models / sky / fog / dlights / marks / portals / mirrors,
-  `screenshot` / `screenshotJPEG` / video capture checked. Checkpoint: a full game on q3dm1
-  with bots.
+- [x] **3. 2D** - `code/renderer_gfx/gfx_draw.c` / `.h` (new: one program, rings, pipeline-key
+  cache, bind caching, draw submission), `gfx_shader.c` / `.h` (new: `.gfx` parsing, program
+  linking, shader folders), `gfx_gl.c` / `.h` (texture staging and upload, glTexSubImage2D,
+  glDrawElements / glArrayElement / glBegin..glEnd, clears through a bound pipeline, MVP,
+  uniforms with polygon offset / clip plane / depth remap), `gfx_glimp.c` (fatal error when the
+  shaders cannot load), `cmake/renderer_gfx.cmake` (the two sources), README, `GFX_TESTING.md`
+  (new). Checkpoint: console and menus on gl4 - done.
+- [ ] **4. 3D** - the code is in (phase 3 ported ioq3-rs's final gfx_gl / gfx_draw); left: the
+  checks of world / curves / models / sky / fog / dlights / marks / portals / mirrors /
+  `r_primitives`, `screenshot` / `screenshotJPEG` / video capture against renderer_opengl1, and
+  fixing what differs. Checkpoint: a full game on q3dm1 with bots.
 - [ ] **5. Parity and speed** - frame comparisons against renderer_opengl1, overbright as blend
   passes (and glReadPixels taking the shift out again), `timedemo` on gl4 in a Release build.
 - [ ] **6. All backends** - gl3, gles3, d3d11, d3d12, vk (validation layer); sdl, glfw, win32
@@ -125,8 +125,58 @@ first. Checkpoint: console and menus on gl4; start `GFX_TESTING.md`.
   Emulated: GL 1.3 with GL_ARB_multitexture (2 units), GL_EXT_compiled_vertex_array,
   GL_EXT_texture_env_add, GL_EXT_texture_filter_anisotropic (max 16) and edge clamp; no texture
   compression. `GL_MAX_TEXTURE_SIZE` per device: gl4 / d3d11 / d3d12 16384, gl3 8192, vk 4096,
-  gles3 2048. Clears, viewport, depth range and scissor go to the device; draws and texture
-  uploads are recorded and dropped until phases 3 / 4.
+  gles3 2048. Clears, viewport, depth range and scissor go to the device; textures and draws
+  are below. Unit 1 counts as off unless `qglActiveTextureARB` is set (r_ext_multitexture), the
+  pointer test standing for ioq3-rs's `multitexture` flag.
+- **Textures** (`gfx_gl.c`, as ioq3-rs). glTexImage2D (renderergl1 always passes RGBA bytes)
+  stages each level, reduced to the internal format (luminance repeats red, the RGB formats get
+  alpha 1); the staged texture becomes one gfx R8G8B8A8 texture with all its levels when another
+  texture is bound or uploaded, or at the next draw - renderergl1 sets filter and wrap after the
+  images, so the gfx texture gets them. Filters map to gfx's min / mag / mip filterings (a texture
+  with only level 0 samples it without mips), GL_CLAMP is edge clamping, anisotropy above 1 is
+  passed on. A new image re-creates the gfx texture; glTexSubImage2D patches the staging, or
+  uploads whole rows from row `yoffset` (RE_UploadCinematic's frames; part of a row: one warning,
+  ioq3-rs gap 18). A parameter change after the gfx texture exists (r_textureMode at run time)
+  cannot reach it (ioq3-rs gap 16): one warning. Where C differs: only one texture is ever staged,
+  so the staging is one buffer in `gfxGl.staging` (grown to the largest image with ri.Malloc, kept
+  until GLimp_Shutdown, also used to reduce a non-RGBA cinematic frame) instead of a Vec per
+  texture.
+- **Draws** (`gfx_draw.c`, the port of ioq3-rs's `gfx_draw.rs` as it ended, after its phases 4-6).
+  One program (`generic.vs` / `generic.fs`: GL's texture environments of both units and the alpha
+  test from the uniform block `Uniforms { mat4 uMVP; vec4 uParams; vec4 uClipPlane; vec4 uDepth }`;
+  a unit that is off samples a 1x1 white texture) - one, because passes drawn with depthFunc
+  GL_EQUAL must compute the exact positions of the pass that wrote the depth (ioq3-rs gap 21).
+  One vertex format (`gfxVertex_t`: xyz f32x3, rgba u8x4, st0 / st1 f32x2 - 32 bytes);
+  glDrawElements gathers the vertices its indices use (all of the locked range with
+  glLockArraysEXT) from the client arrays - a disabled color / texture coordinate array gives the
+  current glColor / glTexCoord - and rebases the indices; glBegin / glEnd turns strips, fans,
+  polygons and quads into indexed triangle lists and line strips into line lists; glArrayElement
+  feeds the immediate vertices. Vertices, u32 indices and uniforms go into three gfx stream
+  buffers made once (16 / 8 / 8 MB rings wrapping when full, ioq3-rs gap 19; on d3d11 one-draw
+  buffers written at offset 0, gap 24); identical consecutive uniforms are written once; indices
+  carry the base vertex (gap 20). Pipelines are found by a 24-byte `gfxPipelineKey_t` (primitive,
+  blend factors or off, color mask, depth test / write / func, stencil func / ref / masks / ops or
+  off, cull, fill mode, scissor - gfx's enum values as bytes, no padding) in a 2048-slot
+  open-addressing table hashed with FNV-1a; blend / depth-stencil / rasterizer states are shared
+  through small arrays searched when a pipeline is made. A draw with the pipeline key or uniform
+  offset of the one before skips the lookup and the gfx bind (reset each frame and by glClear's
+  bind). A key gfx refuses is reported once and its draws dropped. Blend: a color factor's alpha
+  half is the matching `*_ALPHA` factor (D3D11 refuses `*_COLOR` for alpha), GL_SRC_ALPHA_SATURATE
+  is GL_SRC_ALPHA (gap 17). Where C differs: fixed tables and scratch arrays instead of HashMaps
+  and growing Vecs (the draw scratch holds `3 * SHADER_MAX_INDEXES` indices and
+  `SHADER_MAX_INDEXES` vertices, a larger draw is dropped with one warning), the immediate
+  vertices are kept as `gfxVertex_t` (glEnd draws them in place, no copy), and GfxDraw_Draw
+  rebases the caller's index scratch in place.
+- **Polygon offset, clip plane, clip depth in the uniforms** (ioq3-rs gaps 4 / 5 / 23; in with
+  phase 3 as the shaders already take them). glPolygonOffset with GL_POLYGON_OFFSET_FILL (and
+  GL_FILL) is a constant depth bias the vertex shader adds to clip-space z:
+  `(factor * 16 + units) * 2 / 2^24` (no slope term in a vertex shader). glClipPlane keeps the
+  plane in eye coordinates (times the inverse of the modelview it is set under); each draw turns
+  it into object coordinates (`plane * modelview`) for the fragment discard; off, it is
+  (0, 0, 0, 1). `uDepth.y` is 1 on d3d11 / d3d12 / vk, where generic.vs makes z `(z + w) / 2`.
+- **Clears obey GL's masks.** gfx clears with the masks and scissor test of the bound pipeline,
+  so glClear binds the pipeline of GL's current color mask, depth mask and scissor test first
+  (depth test on with GL_ALWAYS, as gfx only applies the depth mask with the test on).
 - **GLimp on gfx** (`gfx_glimp.c`): the window is R8G8B8A8 + D24S8 (`r_ext_multisample` as the
   sample count), titled `CLIENT_WINDOW_TITLE`; `r_mode` as in the GL renderers, then the window's
   real size: gfx makes its windows dpi aware and grows a small one to most of the work area, so
@@ -199,22 +249,28 @@ first. Checkpoint: console and menus on gl4; start `GFX_TESTING.md`.
   post-build step of ioquake3 copies the four folders next to it as `shaders/<dialect>/` (ioq3-rs's
   dist layout; also installed). `generate_shaders.ps1` / `.sh` build `wc_compiler_rs` with rustc
   into `build_shaders/` and recompile every folder (vk only with glslangValidator); run with
-  ioq3-rs's glslang 16.6 they reproduce all 8 files byte for byte. Not loaded yet (phase 3).
+  ioq3-rs's glslang 16.6 they reproduce all 8 files byte for byte. `gfx_shader.c` (the port of
+  ioq3-rs's `gfx_shader.rs`) reads them from `shaders/<dialect>/` in the client's folder
+  (`Sys_BinaryPath`, called directly: renderer_gfx is in the client), then under `fs_basepath` -
+  where ioq3-rs's second folder is its workspace's `shaders/`, which the C build does not need, as
+  the post-build copy puts them next to the client. A missing or bad shader is a fatal GLimp_Init
+  error naming the paths tried.
 - **Builds** go to `build_gfx` (`USE_GFX` on) and `build_nogfx` (off), `build/` is main's. Only
   Visual Studio 18 2026 is installed here, so the generator is `-G "Visual Studio 18 2026" -A x64`
   (the skill's commands name VS 17 2022).
 
 ## Backends (Windows; this gfx build has devices gl3 gl4 gles3 vk d3d11 d3d12, windows win32 glfw sdl)
 
-renderer_gfx only clears so far (`r_clear 1`), so "clears" means: window and device made, the
-clear color shown, `vid_restart` in and out, clean quit; "+ input": phase 2's input check passes
-(keys, chars, console key, mouse motion / buttons / wheel, focus loss, close). The other devices wait for phase 6 (GPU safety:
-each feature on gl4 first). The x11 window and the Linux build are untested here (no Linux
-machine; `cmake/gfx.cmake`'s Linux branch follows gfx's CMakeLists.txt).
+"2D": the console, the main menu and a cinematic draw like renderer_opengl1, `vid_restart` in
+and out, clean quit; "+ input": phase 2's input check passes (keys, chars, console key, mouse
+motion / buttons / wheel, focus loss, close); "q3dm1": its first view and in-game menu match
+renderer_opengl1 (sdl window). The other devices wait for phase 6 (GPU safety: each feature on
+gl4 first). The x11 window and the Linux build are untested here (no Linux machine;
+`cmake/gfx.cmake`'s Linux branch follows gfx's CMakeLists.txt).
 
 | | sdl | glfw | win32 |
 | --- | --- | --- | --- |
-| gl4 (baseline) | clears + input | clears + input | clears + input |
+| gl4 (baseline) | 2D + input + q3dm1 | 2D + input | 2D + input |
 | gl3 | - | - | - |
 | gles3 | - | - | - |
 | d3d11 | - (uses win32, not run yet) | - (same) | - |
@@ -247,6 +303,13 @@ so the rest are expected here too):
 - ioq3-rs gap 28, seen on glfw too: at r_mode 4 the glfw window's client area (1307x980) runs
   under the taskbar - a screen capture of it shows the taskbar over its bottom rows. ioq3-rs
   recorded this for the win32 window only.
+- Worked around by design since phase 3, as in ioq3-rs (not each seen failing here): gaps 4
+  (no depth bias) and 5 (no clip planes) - in the shaders; 16 (sampling fixed at texture
+  creation); 17 (no GL_SRC_ALPHA_SATURATE); 18 (`gfx_set_texture_data` takes whole rows); 19
+  (unsynchronized stream buffers: rings sized for many frames); 20 (no base vertex: indices
+  rebased); 21 (no `invariant` / `precise`: one program); 22 (no push constants: a ring write and
+  `gfx_bind_constant` per uniform change); 23 (GL clip depth on D3D / Vulkan: remapped in
+  generic.vs); 24 (d3d11's WRITE_DISCARD per write: one-draw buffers).
 
 New here (ioq3-rs has the same behaviour, unrecorded):
 
@@ -275,7 +338,11 @@ redefined), as gfx's own build does.
 
 ## Open problems / accepted differences from renderer_opengl1
 
-- renderer_gfx draws nothing but clears until phase 3 (2D) / 4 (3D); `cl_renderer opengl1` plays.
+- 3D is drawn but not checked beyond q3dm1's first view yet (phase 4).
+- renderer_gfx draws at the window's real (dpi-scaled) size, where renderer_opengl1 draws at the
+  `r_mode` size and Windows scales its window up: the same picture, sharper.
+- `r_textureMode` changed in a running game reaches only images loaded after a `vid_restart`
+  (gap 16, one warning).
 - Non-ASCII characters (`å ä ö`) cannot be typed on the win32 window (gfx gap above); the sdl /
   glfw windows and the SDL path type them.
 - On release of a grabbed mouse the cursor goes back to where the grab started, not to the window
@@ -310,6 +377,13 @@ redefined), as gfx's own build does.
   `qconsole.log`. Never inject Esc / CapsLock here (this machine swaps them); in game, console
   text without a slash is sent as chat (`con_autochat`). Windows 11's `Start-Process notepad`
   returns a launcher, not the Notepad window - do not use it as the focus thief.
+- Phase 3 check: windowed `+set r_ignorehwgamma 1 +wait 200 +togglemenu +wait 100 +screenshot
+  +cinematic idlogo.RoQ +wait 150 +screenshot +devmap q3dm1 +wait 300 +screenshot +togglemenu
+  +wait 60 +screenshot`, once with renderer_gfx and once with `+set cl_renderer opengl1`, the TGAs
+  compared side by side (renderer_opengl1's 800x600 scaled to renderer_gfx's 1307x980); a fresh
+  home starts on the CD key menu, `togglemenu` opens the main menu. The window switch:
+  `+togglemenu +wait 60 +screenshot +seta r_gfxWindow win32 +vid_restart +wait 150 +togglemenu
+  +wait 60 +screenshot`, then glfw. How to run is in [GFX_TESTING.md](GFX_TESTING.md).
 - The game console goes to stderr and `qconsole.log`; gfx's `[gfx] using ...` lines go to
   stdout (ioquake3 is a GUI program on Windows: `Start-Process -RedirectStandardOutput`).
 

@@ -347,6 +347,7 @@ static qboolean GfxGLimp_SetMode( int mode, qboolean fullscreen, enum gfx_device
 	int desktopWidth, desktopHeight;
 	int width, height;
 	qboolean haveDesktop;
+	char error[MAX_STRING_CHARS];
 
 	ri.Printf( PRINT_ALL, "Initializing gfx display\n" );
 
@@ -414,7 +415,11 @@ static qboolean GfxGLimp_SetMode( int mode, qboolean fullscreen, enum gfx_device
 		glConfig.colorBits, glConfig.depthBits, glConfig.stencilBits );
 
 	gfx_make_current( window );
-	GfxGL_Init( window, deviceBackend );
+	if ( !GfxGL_Init( window, deviceBackend, error, sizeof( error ) ) ) {
+		// the shaders are part of the install (GLimp_Init's could-not-load-OpenGL case)
+		gfx_delete_window( window );
+		ri.Error( ERR_FATAL, "GLimp_Init() - gfx: %s", error );
+	}
 	gfx_set_swap_interval( window, r_swapInterval->integer );
 
 	qglClearColor( 0, 0, 0, 1 );

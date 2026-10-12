@@ -44,9 +44,12 @@ cmake --build build_nogfx --config RelWithDebInfo
 pick the gfx backends; both are latched, so `vid_restart` applies them, a backend the gfx
 build lacks falls back to the default, and `d3d11` / `d3d12` always open the win32 window. With
 renderer_gfx the keyboard, text, mouse and window events come from the gfx window
-(`code/gfx/gfx_input.c`); gamepads and sound stay on SDL. Until GFX_STATUS.md's phase 3
-renderer_gfx only clears the frame - play with `cl_renderer opengl1` meanwhile. The compiled shaders are copied next to the client as
-`shaders/<dialect>/`; `code/renderer_gfx/shaders/generate_shaders.ps1` / `.sh` regenerate them.
+(`code/gfx/gfx_input.c`); gamepads and sound stay on SDL. renderer_gfx draws the menus, the
+console, cinematics and the game on gl4; the other devices and the full-game checks are still to
+come (GFX_STATUS.md). The compiled shaders are copied next to the client as
+`shaders/<dialect>/` (renderer_gfx needs them there, or under `fs_basepath`);
+`code/renderer_gfx/shaders/generate_shaders.ps1` / `.sh` regenerate them. How to run and test
+it is in [GFX_TESTING.md](GFX_TESTING.md).
 
 
 ![Build](https://github.com/ioquake/ioq3/workflows/Build/badge.svg)
