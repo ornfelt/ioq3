@@ -11,17 +11,19 @@ This file is the current snapshot; the history is in git.
 The x11 window is Linux only and not built or run here (no Linux machine, no WSL). Phase 7
 (renderergl2 features) is only done when asked. Merging `gfx` into `main` is the user's decision.
 
-**Last run:** the gfx fixes (gfx gaps, "Fixed in gfx"), one step at a time. Step 1 is in gfx:
-the win32 window's characters and raw-input message; `GfxGLimp_Error`'s filter for that message
-is gone. Checked on the win32 window with injected input: `å ä ö § €` reach the console, clicks
-and the wheel while grabbed print nothing at `developer 1`. Step 2 is in gfx: the vk device frees
-its VMA memory. Checked on vk / sdl with the Khronos validation layer (`devmap q3dm0`,
-`vid_restart`, quit): VUID-vkDestroyDevice-device-05137 is gone, no leak reported, no TDR.
+**Last run:** steps 1-3 of the recommended gfx fixes, each made in gfx (`gfx_dll/gfx`, the same
+in `gfx_benilla` where it applied and in wc_clean_new's `lib/gfx`) with the matching change here,
+one commit each ("Fixed in gfx"): (1) the win32 window's characters and raw-input message -
+`GfxGLimp_Error`'s filter is gone; injected input on the win32 window typed `å ä ö § €` into the
+console, clicks and the wheel while grabbed printed nothing at `developer 1`; (2) the vk VMA leak -
+on vk / sdl with the Khronos validation layer (`devmap q3dm0`, `vid_restart`, quit)
+VUID-vkDestroyDevice-device-05137 is gone, no leak reported, no TDR; (3) the sdl window's mouse
+buttons - `IN_GfxButtonToQ3Key`'s sdl-window renumbering is gone; injected X1 / X2 give K_MOUSE4 /
+K_MOUSE5 on the sdl, glfw and win32 windows. build_gfx rebuilt after each step.
 
 **Next:** nothing in phases 0-6. Possible follow-ups, none required: the x11 window and the
 Linux build on a Linux machine (`cmake/gfx.cmake`'s Linux branch follows gfx's CMakeLists.txt),
-the gfx gaps below once gfx has them (in the recommended order under "gfx gaps"), phase 7 when
-asked.
+gfx fix step 4 (read back, gap 3) once gfx has it, phase 7 when asked.
 
 ## Phases
 
@@ -223,8 +225,8 @@ asked.
   it to the window center; `gfx_set_mouse_position` is there in the static build, but takes screen
   coordinates on the win32 window and window coordinates on the others, so ioq3-rs's behaviour is
   kept). Buttons: left / right / middle as K_MOUSE1-3, the rest by SDL's button number (X1 / X2
-  as K_MOUSE4 / 5, then K_AUX as the SDL formula), with gfx's sdl window numbered as SDL and the
-  win32 / glfw windows one lower (gap below). Focus: gfx has no query, so IN_GfxInit asks Windows
+  as K_MOUSE4 / 5, then K_AUX as the SDL formula), which is gfx's number plus one on every gfx
+  window. Focus: gfx has no query, so IN_GfxInit asks Windows
   whether the foreground window is this process's (elsewhere: focused), and IN_Init's
   `com_unfocused` follows it; FOCUS_IN / FOCUS_OUT after that; focus loss sends the key ups of
   the keys reported down (SDL does that itself) and a re-press arriving as a repeat counts as a
@@ -329,11 +331,6 @@ so the rest are expected here too):
 
 New here (ioq3-rs has the same behaviour, unrecorded):
 
-- The sdl window numbers the mouse buttons past middle as SDL does (`get_button` returns SDL's
-  number: X1 = 4 = GFX_MOUSE_BUTTON_5), the win32 / glfw windows one lower (X1 =
-  GFX_MOUSE_BUTTON_4), so one physical button is two gfx buttons. Workaround: gfx_input.c
-  renumbers by window backend (X1 is K_MOUSE4 on every window, as on the SDL path; ioq3-rs, by
-  its code, gives K_MOUSE5 for X1 on the sdl window).
 - `gfx_set_mouse_position` takes screen coordinates on the win32 window (SetCursorPos) and window
   coordinates on the sdl / glfw ones - gfx_input.c does not warp the cursor.
 
@@ -363,25 +360,28 @@ wc_clean_new's `lib/gfx` copy), so ioq3-rs's gfx.dll gets them too once rebuilt:
   `vk_mem_alloc.cpp`) reports a leak found then through `GFX_ERROR` (a `gfx: vk: leak at device
   destruction` warning here) instead of asserting, so a gfx without `NDEBUG` does not abort.
   renderer_gfx deletes every gfx object it made before the device; none is reported.
+- **Step 3** (gfx `6831cd8`): the sdl window numbers the mouse buttons past middle one lower than
+  SDL (X1 = `GFX_MOUSE_BUTTON_4`), as the win32, glfw and x11 windows do - it gave SDL's own
+  number (X1 = `GFX_MOUSE_BUTTON_5`), so one physical button was two gfx buttons. gfx_input.c's
+  renumbering by window backend (`gfxInput.sdlWindow`) is gone: X1 / X2 are K_MOUSE4 / K_MOUSE5
+  on every window, as on the SDL path. ioq3-rs's gfx_input.rs gets X1 = K_MOUSE4 on the sdl window
+  with no change (it gave K_MOUSE5 there). Other gfx programs reading side buttons on the sdl
+  window see them one lower (the wow clients name them by gfx's enum, so X1 is "Button4" on
+  every window now; gfx_benilla's sdl window already numbered them so).
 
 ### Recommended order for the gfx fixes
 
-All of these are in gfx's shared sources, so ioq3-rs's gfx.dll has them too (only gap 3 is in
-its `GFX_STATUS.md`); one fix in gfx serves both ioq3 versions. Cheapest and safest first:
+All of these are in gfx's shared sources, so ioq3-rs's gfx.dll has them too (only gap 3 was in
+its `GFX_STATUS.md`); one fix in gfx serves both ioq3 versions. Cheapest and safest first; steps
+1-3 are done, step 4 is open:
 
 1. **Done: the win32 characters and the raw-input message** (Fixed in gfx, step 1).
 2. **Done: the vk VMA leak** (Fixed in gfx, step 2).
-3. **The sdl window's mouse buttons** - breaking, so coordinated. Only the sdl window is out of
-   line: `windows/sdl.c`'s `get_button` returns SDL's number (X1 = 4 = `GFX_MOUSE_BUTTON_5`),
-   where glfw, win32 and x11 give X1 = `GFX_MOUSE_BUTTON_4`; the fix is one line there (one less
-   past middle). It fixes ioq3-rs as it is, but `IN_GfxButtonToQ3Key`'s `gfxInput.sdlWindow`
-   case (gfx_input.c) must go in the same step - else the sdl window's X1 becomes SDL button 3,
-   which the K_AUX formula turns into a key below K_AUX1 - and other gfx programs reading side
-   buttons on the sdl window shift by one.
+3. **Done: the sdl window's mouse buttons** (Fixed in gfx, step 3).
 4. **Read back (gap 3)** - not breaking (a new function), but the most work: every device, a
    gfx.dll export, ioq3-rs's bindings. On Windows it only gains flares' depth test (`r_flares`,
    off by default), as color comes from the screen; on Linux screenshots and video capture get
-   zeros, so with a Linux build next, color read back goes before step 2.
+   zeros, so with a Linux build next, color read back comes first.
 
 Not recommended: making `gfx_set_mouse_position` take window coordinates on win32. It breaks
 callers passing screen coordinates, gfx's own included (`gfx_win32_ungrab_cursor` converts to

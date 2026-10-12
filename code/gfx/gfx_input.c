@@ -59,9 +59,6 @@ static struct
 	unsigned int		width;
 	unsigned int		height;
 
-	// gfx's sdl window numbers the mouse buttons past middle as SDL does, the others one lower
-	qboolean			sdlWindow;
-
 	// IN_ProcessEvents' lastKeyDown for the gfx window's events
 	keyNum_t			lastKeyDown;
 
@@ -158,7 +155,6 @@ void IN_GfxInit( struct gfx_window *window )
 	IN_GfxResetMousePosition( window );
 	gfxInput.width = gfx_window_get_width( window );
 	gfxInput.height = gfx_window_get_height( window );
-	gfxInput.sdlWindow = gfx_window_get_window_backend( window ) == GFX_WINDOW_SDL ? qtrue : qfalse;
 	gfxInput.lastKeyDown = 0;
 
 	// IN_Init has registered them
@@ -408,8 +404,7 @@ void IN_GfxDeactivateMouse( struct gfx_window *window )
 IN_GfxButtonToQ3Key
 
 The K_MOUSE / K_AUX key of a gfx mouse button, as the SDL path numbers SDL's buttons. gfx's
-buttons past middle are SDL's button numbers less one on its win32 and glfw windows, and SDL's
-own numbers on its sdl window (GFX_STATUS.md, gfx gaps).
+buttons past middle are SDL's button numbers less one on every gfx window.
 ===============
 */
 static keyNum_t IN_GfxButtonToQ3Key( enum gfx_mouse_button button )
@@ -424,7 +419,7 @@ static keyNum_t IN_GfxButtonToQ3Key( enum gfx_mouse_button button )
 		default:                      break;
 	}
 
-	sdlButton = gfxInput.sdlWindow ? (int)button : (int)button + 1;
+	sdlButton = (int)button + 1;
 
 	switch( sdlButton )
 	{
