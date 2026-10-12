@@ -14,7 +14,9 @@ The x11 window is Linux only and not built or run here (no Linux machine, no WSL
 **Last run:** the gfx fixes (gfx gaps, "Fixed in gfx"), one step at a time. Step 1 is in gfx:
 the win32 window's characters and raw-input message; `GfxGLimp_Error`'s filter for that message
 is gone. Checked on the win32 window with injected input: `å ä ö § €` reach the console, clicks
-and the wheel while grabbed print nothing at `developer 1`.
+and the wheel while grabbed print nothing at `developer 1`. Step 2 is in gfx: the vk device frees
+its VMA memory. Checked on vk / sdl with the Khronos validation layer (`devmap q3dm0`,
+`vid_restart`, quit): VUID-vkDestroyDevice-device-05137 is gone, no leak reported, no TDR.
 
 **Next:** nothing in phases 0-6. Possible follow-ups, none required: the x11 window and the
 Linux build on a Linux machine (`cmake/gfx.cmake`'s Linux branch follows gfx's CMakeLists.txt),
@@ -327,12 +329,6 @@ so the rest are expected here too):
 
 New here (ioq3-rs has the same behaviour, unrecorded):
 
-- The vk device leaks its VMA memory at shutdown: `vk_dtr` (devices/vk.c) destroys the VkDevice
-  without `vmaDestroyAllocator`, so VMA's memory blocks are never freed - the validation layer
-  reports VUID-vkDestroyDevice-device-05137 ("2 leaked objects", two VkDeviceMemory) at every
-  vk shutdown (quit or `vid_restart`). renderer_gfx deletes every gfx object it made before the
-  device. Harmless at quit; each vk `vid_restart` leaks the blocks once.
-
 - The sdl window numbers the mouse buttons past middle as SDL does (`get_button` returns SDL's
   number: X1 = 4 = GFX_MOUSE_BUTTON_5), the win32 / glfw windows one lower (X1 =
   GFX_MOUSE_BUTTON_4), so one physical button is two gfx buttons. Workaround: gfx_input.c
@@ -361,6 +357,12 @@ wc_clean_new's `lib/gfx` copy), so ioq3-rs's gfx.dll gets them too once rebuilt:
   instead of reported as "not RELATIVE or ABSOLUTE mouse move"; `GfxGLimp_Error`'s filter for it
   is gone. Characters of a double-byte or UTF-8 ANSI code page still need more than one WM_CHAR
   and are dropped (as before).
+- **Step 2** (gfx `68aad90`): `vk_dtr` destroys the VMA allocator before the device, so VMA's
+  memory blocks are freed - the validation layer's VUID-vkDestroyDevice-device-05137 (two leaked
+  VkDeviceMemory) at every vk quit and `vid_restart` is gone. `VMA_ASSERT_LEAK` (in
+  `vk_mem_alloc.cpp`) reports a leak found then through `GFX_ERROR` (a `gfx: vk: leak at device
+  destruction` warning here) instead of asserting, so a gfx without `NDEBUG` does not abort.
+  renderer_gfx deletes every gfx object it made before the device; none is reported.
 
 ### Recommended order for the gfx fixes
 
@@ -368,14 +370,7 @@ All of these are in gfx's shared sources, so ioq3-rs's gfx.dll has them too (onl
 its `GFX_STATUS.md`); one fix in gfx serves both ioq3 versions. Cheapest and safest first:
 
 1. **Done: the win32 characters and the raw-input message** (Fixed in gfx, step 1).
-2. **The vk VMA leak** - `vmaDestroyAllocator` in `vk_dtr` before `DestroyDevice`
-   (`devices/vk.c`). Not breaking only with care: without `NDEBUG`, VMA's `VMA_ASSERT_LEAK` is
-   `assert` (`vk_mem_alloc.h`), so a program that destroys the device with gfx objects still
-   alive - or gfx itself, if an internal allocation outlives `vk_dtr` (not checked) - would abort
-   where today it leaks; ioq3-rs runs a Debug gfx.dll (its gap 8). Define `VMA_ASSERT_LEAK` to
-   report through `GFX_ERROR` before including VMA, then check ioq3 and ioq3-rs once on vk with the
-   validation layer (`vid_restart` and quit). renderer_gfx deletes every gfx object before the
-   device.
+2. **Done: the vk VMA leak** (Fixed in gfx, step 2).
 3. **The sdl window's mouse buttons** - breaking, so coordinated. Only the sdl window is out of
    line: `windows/sdl.c`'s `get_button` returns SDL's number (X1 = 4 = `GFX_MOUSE_BUTTON_5`),
    where glfw, win32 and x11 give X1 = `GFX_MOUSE_BUTTON_4`; the fix is one line there (one less
