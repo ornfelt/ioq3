@@ -35,6 +35,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
 #ifdef USE_GFX
 #include "gfx/window.h"
+#include "../gfx/gfx_input.h"
 #include "../renderer_gfx/gfx_public.h"
 #endif
 
@@ -71,10 +72,9 @@ static SDL_Window *SDL_window = NULL;
 ===============
 IN_GfxWindowWithoutSDL
 
-renderer_gfx's gfx window when it is not an SDL one. An SDL one shares the client's SDL2, so its
-events reach IN_ProcessEvents as the GL renderers' window does; any other has no SDL video
-behind it and is kept alive by gfx's own event pump (its input is read from gfx in
-GFX_STATUS.md phase 2). NULL while another renderer is loaded.
+renderer_gfx's gfx window when it is not an SDL one. An SDL one shares the client's SDL2, so SDL
+video is up behind it; any other has no SDL video behind it. Either way its events come through
+gfx (code/gfx/gfx_input.c). NULL while another renderer is loaded.
 ===============
 */
 static struct gfx_window *IN_GfxWindowWithoutSDL( void )
@@ -129,7 +129,10 @@ TODO: If the SDL_Scancode situation improves, use it instead of
       both of these methods
 ===============
 */
-static qboolean IN_IsConsoleKey( keyNum_t key, int character )
+#ifndef USE_GFX
+static
+#endif
+qboolean IN_IsConsoleKey( keyNum_t key, int character )
 {
 	typedef struct consoleKey_s
 	{
@@ -373,6 +376,21 @@ IN_ActivateMouse
 */
 static void IN_ActivateMouse( qboolean isFullscreen )
 {
+#ifdef USE_GFX
+	struct gfx_window *gfxWindow = GfxGLimp_GetWindow( );
+
+	// renderer_gfx's window grabs through gfx
+	if( gfxWindow )
+	{
+		if( mouseAvailable )
+		{
+			IN_GfxActivateMouse( gfxWindow, isFullscreen, mouseActive );
+			mouseActive = qtrue;
+		}
+		return;
+	}
+#endif
+
 	if (!mouseAvailable || !SDL_WasInit( SDL_INIT_VIDEO ) )
 		return;
 
@@ -411,6 +429,21 @@ IN_DeactivateMouse
 */
 static void IN_DeactivateMouse( qboolean isFullscreen )
 {
+#ifdef USE_GFX
+	struct gfx_window *gfxWindow = GfxGLimp_GetWindow( );
+
+	// renderer_gfx's window releases through gfx (which shows the cursor again)
+	if( gfxWindow )
+	{
+		if( mouseAvailable && mouseActive )
+		{
+			IN_GfxDeactivateMouse( gfxWindow );
+			mouseActive = qfalse;
+		}
+		return;
+	}
+#endif
+
 	if( !SDL_WasInit( SDL_INIT_VIDEO ) )
 		return;
 
@@ -1048,6 +1081,39 @@ static void IN_JoyMove( void )
 	stick_state.oldaxes = axes;
 }
 
+#ifdef USE_GFX
+/*
+===============
+IN_ProcessSDLDeviceEvents
+
+The SDL events IN_ProcessEvents still takes from SDL while a gfx window delivers the rest -
+gamepad hot-plug and SDL_QUIT. They are taken out of SDL's queue before gfx polls it (on gfx's
+SDL window, gfx's SDL_PollEvent would drop them).
+===============
+*/
+static void IN_ProcessSDLDeviceEvents( void )
+{
+	SDL_Event e;
+	qboolean deviceChanged = qfalse;
+	qboolean quit;
+
+	if( !SDL_WasInit( 0 ) )
+		return;
+
+	SDL_PumpEvents( );
+
+	while( SDL_PeepEvents( &e, 1, SDL_GETEVENT,
+		SDL_CONTROLLERDEVICEADDED, SDL_CONTROLLERDEVICEREMOVED ) > 0 )
+		deviceChanged = qtrue;
+	quit = SDL_PeepEvents( &e, 1, SDL_GETEVENT, SDL_QUIT, SDL_QUIT ) > 0 ? qtrue : qfalse;
+
+	if( deviceChanged && in_joystick->integer )
+		IN_InitJoystick( );
+	if( quit )
+		Cbuf_ExecuteText( EXEC_NOW, "quit Closed window\n" );
+}
+#endif
+
 /*
 ===============
 IN_ProcessEvents
@@ -1058,6 +1124,23 @@ static void IN_ProcessEvents( void )
 	SDL_Event e;
 	keyNum_t key = 0;
 	static keyNum_t lastKeyDown = 0;
+
+#ifdef USE_GFX
+	struct gfx_window *gfxWindow = GfxGLimp_GetWindow( );
+
+	// renderer_gfx's window delivers its events through gfx (SDL window or not); SDL keeps the
+	// joystick hot-plug and quit events
+	if( gfxWindow )
+	{
+		IN_ProcessSDLDeviceEvents( );
+		if( IN_GfxProcessEvents( gfxWindow, in_eventTime, mouseActive ) )
+		{
+			// Wait until user stops dragging for 1 second, as for SDL_WINDOWEVENT_RESIZED
+			vidRestartTime = Sys_Milliseconds( ) + 1000;
+		}
+		return;
+	}
+#endif
 
 	if( !SDL_WasInit( SDL_INIT_VIDEO ) )
 			return;
@@ -1266,13 +1349,6 @@ void IN_Frame( void )
 {
 	qboolean loading;
 
-#ifdef USE_GFX
-	struct gfx_window *gfxWindow = IN_GfxWindowWithoutSDL( );
-
-	if( gfxWindow )
-		gfx_window_poll_events( gfxWindow );
-#endif
-
 	IN_JoyMove( );
 
 	// If not DISCONNECTED (main menu) or ACTIVE (in game), we're loading
@@ -1291,7 +1367,13 @@ void IN_Frame( void )
 		// Loading in windowed mode
 		IN_DeactivateMouse( cls.glconfig.isFullscreen );
 	}
+#ifdef USE_GFX
+	// gfx has no focus query; gfx_input.c follows the focus events
+	else if( GfxGLimp_GetWindow( ) ? !IN_GfxHasFocus( ) :
+		!( SDL_GetWindowFlags( SDL_window ) & SDL_WINDOW_INPUT_FOCUS ) )
+#else
 	else if( !( SDL_GetWindowFlags( SDL_window ) & SDL_WINDOW_INPUT_FOCUS ) )
+#endif
 	{
 		// Window not got focus
 		IN_DeactivateMouse( cls.glconfig.isFullscreen );
@@ -1352,10 +1434,21 @@ void IN_Init( void *windowData )
 
 	SDL_StartTextInput( );
 
+#ifdef USE_GFX
+	// the client's input now comes from renderer_gfx's window
+	if( GfxGLimp_GetWindow( ) )
+		IN_GfxInit( GfxGLimp_GetWindow( ) );
+#endif
+
 	mouseAvailable = ( in_mouse->value != 0 );
 	IN_DeactivateMouse( Cvar_VariableIntegerValue( "r_fullscreen" ) != 0 );
 
 	appState = SDL_GetWindowFlags( SDL_window );
+#ifdef USE_GFX
+	// a gfx window is not minimized when it is made; its focus is what gfx_input.c found
+	if( GfxGLimp_GetWindow( ) )
+		appState = IN_GfxHasFocus( ) ? SDL_WINDOW_INPUT_FOCUS : 0;
+#endif
 	Cvar_SetValue( "com_unfocused",	!( appState & SDL_WINDOW_INPUT_FOCUS ) );
 	Cvar_SetValue( "com_minimized", appState & SDL_WINDOW_MINIMIZED );
 

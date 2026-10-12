@@ -6,22 +6,24 @@ Work happens on the `gfx` branch; `main` stays the plain fork. The design follow
 finished renderer_gfx (`$code_root_dir/Code2/Rust/ioq3-rs`, `gfx` branch, its `GFX_STATUS.md`).
 This file is the current snapshot; the history is in git.
 
-**Last run:** phase 1. renderer_gfx no longer compiles sdl_glimp.c / sdl_gamma.c: `gfx_glimp.c`
-creates the gfx window and device for `r_gfxDevice` / `r_gfxWindow` (with the fallbacks), swaps,
-shuts down and hands the window to the client (`GfxGLimp_GetWindow()`); `gfx_gl.c` / `.h` are the
-back end's `qgl*` calls on gfx (GL state kept as data, clears / viewport / scissor on the device,
-draws and uploads recorded and dropped), and `glReadPixels` reads the window from the screen.
-`sdl_input.c` runs without SDL video under a non-SDL gfx window and pumps its events. Checked on
-gl4: `r_clear 1` frames are the clear color (255,0,128) on the sdl, glfw and win32 windows
-(screenshots), `vid_restart` switches between them, fullscreen and a q3dm1 load run and quit
-cleanly, an unknown `r_gfxDevice` falls back to gl4, and `cl_renderer opengl1` still plays q3dm1.
+**Last run:** phase 2. The client's keyboard, text, mouse and window events come from the gfx
+window: new `code/gfx/gfx_input.c` / `.h` (the port of ioq3-rs's `gfx_input.rs`) queue gfx's
+events in a fixed ring and hand them to the client as the SDL path does; `sdl_input.c` dispatches
+IN_ProcessEvents, IN_ActivateMouse / IN_DeactivateMouse, IN_Frame's focus test and IN_Init to it
+while `GfxGLimp_GetWindow()` is not NULL. Checked on gl4 (RelWithDebInfo, q3dm1) with injected
+input (keybd_event with scancodes, mouse_event) on the sdl, glfw and win32 windows: binds (F5,
+MOUSE2, MOUSE4 from X1, MWHEELUP), console typing and Enter, the console key (win32 / glfw),
+10 relative mouse moves (`cl_showMouseRate`), a held Shift released on focus loss, WM_CLOSE as
+`quit Closed window`, and the same after `vid_restart` from win32 to glfw; `cl_renderer opengl1`
+still reads SDL's input, and `USE_GFX=OFF` builds.
 
-**Next:** phase 2 - `code/gfx/gfx_input.c` / `.h` (new, client, `USE_GFX`): gfx's event handler
-into a fixed ring, key map to `K_*`, char events, relative mouse with grab / release, focus,
-resize, close; `sdl_input.c` dispatches `IN_ProcessEvents`, `IN_ActivateMouse` /
-`IN_DeactivateMouse`, `IN_Frame`'s focus test and `IN_Init` to it while `GfxGLimp_GetWindow()`
-is not NULL. Read ioq3-rs's `code/gfx/gfx_input.rs`, its "Input on gfx" decision and its phase 2
-commit (`200764d`) first.
+**Next:** phase 3 - 2D. `gfx_draw.c` / `.h` (programs, vertex / index / uniform rings, the
+pipeline-key cache, draw submission), `gfx_shader.c` (loading `shaders/<dialect>/*.gfx` next to
+the client), `gfx_gl.c`'s texture staging and upload (formats, mipmaps, picmip, texture modes,
+glTexSubImage2D for cinematics), glDrawElements / glBegin..glEnd through the generic program,
+clears through a bound pipeline so they obey GL's masks. Read ioq3-rs's phase 3 commit
+(`82b20ed`), `gfx_draw.rs`, `gfx_gl.rs`, `gfx_shader.rs` and its "Shaders" / "Draws" decisions
+first. Checkpoint: console and menus on gl4; start `GFX_TESTING.md`.
 
 ## Phases
 
@@ -39,14 +41,12 @@ commit (`200764d`) first.
   `cmake/renderer_gfx.cmake` (gfx_gl.c in, `SDL_RENDERER_SOURCES` out), `code/sdl/sdl_input.c`
   (`IN_GfxWindowWithoutSDL`: no SDL video needed, `gfx_window_poll_events` each frame), README.
   Checkpoint: a cleared frame on gl4 - done.
-- [ ] **2. Input** - `code/gfx/gfx_input.c` / `.h` (new; compiled into the client under
-  `USE_GFX`): event ring filled by gfx's handler, key map to `K_*`, chars, relative mouse with
-  grab / release, focus, resize, close; `sdl_input.c` dispatches `IN_ProcessEvents`,
-  `IN_ActivateMouse` / `IN_DeactivateMouse`, `IN_Frame`'s focus test and `IN_Init` to it when
-  `GfxGLimp_GetWindow()` is not NULL (`com_unfocused` is 1 until then: SDL_GetWindowFlags of no
-  window); SDL keeps joysticks / gamepads and the audio, and its gamepad hot-plug / SDL_QUIT
-  events must be taken before gfx's SDL window polls SDL's queue.
-  Checkpoint: keys, text, mouse, focus, close on the sdl, glfw and win32 windows.
+- [x] **2. Input** - `code/gfx/gfx_input.c` / `.h` (new, compiled into the client by
+  `cmake/renderer_gfx.cmake`): event ring, key map, chars, relative mouse with grab / release,
+  focus with key release, resize, close; `code/sdl/sdl_input.c` (gfx dispatch, SDL device / quit
+  events taken before gfx polls, `IN_IsConsoleKey` shared); `gfx_glimp.c` (gfx's raw-input
+  no-motion error to the developer console); README.
+  Checkpoint: keys, text, mouse, focus, close on the sdl, glfw and win32 windows - done.
 - [ ] **3. 2D** - `gfx_draw.c` / `.h` (programs, rings, pipeline-key cache, draw submission),
   `gfx_shader.c` (loading `shaders/<dialect>/*.gfx`), `gfx_gl.c` (texture staging and upload,
   glTexSubImage2D, glDrawElements / glArrayElement / glBegin..glEnd, clears through a bound
@@ -147,11 +147,43 @@ commit (`200764d`) first.
   the renderer dll: `GfxGLimp_GetWindow()` (`gfx_public.h`) returns renderer_gfx's window, NULL
   while it has none (another renderer loaded, or before GLimp_Init / after GLimp_Shutdown).
   `ri.IN_Init` gets NULL (there is no SDL window); `cl_main.c` needs no change for it.
-- **Client input on a gfx window** (`sdl_input.c`, under `USE_GFX`): `IN_GfxWindowWithoutSDL()`
-  is the gfx window when it is not an SDL one; then `IN_Init` does not require SDL video, and
-  `IN_Frame` calls `gfx_window_poll_events` to keep the window alive (its events are read in
-  phase 2). An SDL gfx window shares the client's SDL2, so its events reach `IN_ProcessEvents`
-  as the GL renderers' window does.
+- **Input on gfx** (`code/gfx/gfx_input.c`, the port of ioq3-rs's `gfx_input.rs`). For every
+  gfx window, SDL ones included, IN_ProcessEvents calls `gfx_window_poll_events`; the event
+  handler only copies events into a fixed 1024-entry ring (a Com_Error longjmp out of gfx's
+  message dispatch would leave the window system mid-call), drained right after the poll. GFX_KEY_*
+  map to the keys IN_TranslateSDLToQ3Key gives (letters / digits / US punctuation as ASCII,
+  keypad, F1-F15, modifiers; F16+ and KP_EQUAL none, as there), then the console-key check;
+  `in_keyboardDebug` prints the gfx key and mods. KEY_PRESS is SDL's repeat (dropped with no key
+  catcher). Char events go through the SDL path's console-key / SE_CHAR logic; control
+  characters (win32's WM_CHAR has them, SDL's text input not) are dropped - the key path queues
+  CTRL-h / CTRL-letters as before. Mouse motion is the delta between gfx's reported positions
+  (its virtual position while grabbed); `gfx_grab_cursor` / `gfx_ungrab_cursor` stand for SDL's
+  relative mode + window grab, `in_nograb` ungrabs; motion is gobbled by pumping and dropping the
+  queued moves. On release gfx puts the cursor back where the grab started (the SDL path warps
+  it to the window center; `gfx_set_mouse_position` is there in the static build, but takes screen
+  coordinates on the win32 window and window coordinates on the others, so ioq3-rs's behaviour is
+  kept). Buttons: left / right / middle as K_MOUSE1-3, the rest by SDL's button number (X1 / X2
+  as K_MOUSE4 / 5, then K_AUX as the SDL formula), with gfx's sdl window numbered as SDL and the
+  win32 / glfw windows one lower (gap below). Focus: gfx has no query, so IN_GfxInit asks Windows
+  whether the foreground window is this process's (elsewhere: focused), and IN_Init's
+  `com_unfocused` follows it; FOCUS_IN / FOCUS_OUT after that; focus loss sends the key ups of
+  the keys reported down (SDL does that itself) and a re-press arriving as a repeat counts as a
+  press. Resize: only a size other than the last one, only with `r_allowResize`, then the SDL
+  path's delayed `vid_restart`; a 0x0 size (win32 minimized) sets `com_minimized`. CLOSE runs
+  `quit Closed window`. SDL keeps joysticks / gamepads and audio: IN_ProcessSDLDeviceEvents takes
+  the gamepad hot-plug and SDL_QUIT events out of SDL's queue (SDL_PeepEvents) before gfx's sdl
+  window polls it.
+- **sdl_input.c's state stays in sdl_input.c** (where C is simpler than ioq3-rs, which made
+  seven globals `pub(crate)`): `mouseActive` / `mouseAvailable` are tested and set around the
+  `IN_Gfx*` calls, IN_GfxProcessEvents takes `in_eventTime` and `mouseActive` and returns whether
+  a resize asks for the delayed `vid_restart`, gfx_input.c reads `in_keyboardDebug` / `in_nograb`
+  through `Cvar_Get` and keeps its own `lastKeyDown` (each event path has its own). Only
+  `IN_IsConsoleKey` is shared (not `static` under `USE_GFX`), as its parse cache follows
+  `cl_consoleKeys->modified`. `IN_GfxWindowWithoutSDL()` still lets IN_Init run without SDL video
+  on a non-SDL gfx window; the phase 1 poll in IN_Frame is gone (IN_GfxProcessEvents polls).
+- **gfx's raw-input warning** (`gfx_glimp.c`): gfx's win32 window reports each raw mouse input
+  without motion (a click or the wheel while grabbed) as an error; `GfxGLimp_Error` sends that
+  one message to the developer console, the rest stay warnings.
 - **glReadPixels from the screen** (ioq3-rs gap 3; here from phase 1, so screenshots can check
   each phase). On Windows, glReadPixels of GL_RGB / GL_RGBA bytes reads the gfx window's client
   area from the screen (GDI BitBlt + GetDIBits of this thread's `ioquake3` window, bottom-up rows
@@ -174,14 +206,15 @@ commit (`200764d`) first.
 
 ## Backends (Windows; this gfx build has devices gl3 gl4 gles3 vk d3d11 d3d12, windows win32 glfw sdl)
 
-Phase 1 only clears (`r_clear 1`), so "clears" means: window and device made, the clear color
-shown, `vid_restart` in and out, clean quit. The other devices wait for phase 6 (GPU safety:
+renderer_gfx only clears so far (`r_clear 1`), so "clears" means: window and device made, the
+clear color shown, `vid_restart` in and out, clean quit; "+ input": phase 2's input check passes
+(keys, chars, console key, mouse motion / buttons / wheel, focus loss, close). The other devices wait for phase 6 (GPU safety:
 each feature on gl4 first). The x11 window and the Linux build are untested here (no Linux
 machine; `cmake/gfx.cmake`'s Linux branch follows gfx's CMakeLists.txt).
 
 | | sdl | glfw | win32 |
 | --- | --- | --- | --- |
-| gl4 (baseline) | clears | clears | clears |
+| gl4 (baseline) | clears + input | clears + input | clears + input |
 | gl3 | - | - | - |
 | gles3 | - | - | - |
 | d3d11 | - (uses win32, not run yet) | - (same) | - |
@@ -201,9 +234,37 @@ so the rest are expected here too):
 - ioq3-rs gap 9: the win32 window's `gfx_window_get_width` / `_height` give the requested size,
   not the client area (r_mode 4: 800x600 reported, 1291x941 client; sdl / glfw report their real
   1307x980). Workaround: the client rectangle from Windows.
+- ioq3-rs gap 11: the sdl window maps keys by SDL keycode (layout) without a scancode: on this
+  Swedish layout the key left of 1 (`§`) arrives as GFX_KEY_UNKNOWN there, where win32 / glfw
+  map it by position to GFX_KEY_GRAVE (the console key). The SDL path makes it K_WORLD_53, which
+  is no console key either, so the console does not open from it on the SDL path or the sdl gfx
+  window alike (bind a key to `toggleconsole`, or Shift+Esc).
+- ioq3-rs gap 12: no focus query, the win32 window takes the focus before a handler is set
+  (workaround: GetForegroundWindow's process on Windows).
+- ioq3-rs gap 13: no minimize / restore event (win32's 0x0 resize is used).
+- ioq3-rs gap 14: no key ups on focus loss, a key held over it comes back as KEY_PRESS
+  (workaround in gfx_input.c).
 - ioq3-rs gap 28, seen on glfw too: at r_mode 4 the glfw window's client area (1307x980) runs
   under the taskbar - a screen capture of it shows the taskbar over its bottom rows. ioq3-rs
   recorded this for the win32 window only.
+
+New here (ioq3-rs has the same behaviour, unrecorded):
+
+- The sdl window numbers the mouse buttons past middle as SDL does (`get_button` returns SDL's
+  number: X1 = 4 = GFX_MOUSE_BUTTON_5), the win32 / glfw windows one lower (X1 =
+  GFX_MOUSE_BUTTON_4), so one physical button is two gfx buttons. Workaround: gfx_input.c
+  renumbers by window backend (X1 is K_MOUSE4 on every window, as on the SDL path; ioq3-rs, by
+  its code, gives K_MOUSE5 for X1 on the sdl window).
+- The win32 window's WM_INPUT reports a raw mouse input without motion (button or wheel
+  transitions, which raw input also delivers while grabbed) as an error, "not RELATIVE or ABSOLUTE
+  mouse move: 0" - a warning per click in game through the error callback. Workaround: that
+  message goes to the developer console (`gfx_glimp.c`).
+- The win32 window drops every character whose UTF-16 low byte is 0x80 or more (`å ä ö §`, ...)
+  with "invalid event codepoint": WM_CHAR packs the code unit into a `char tmp[2]` and jks's
+  `utf16_decode1` widens the signed `char` bytes, so 0xA7 becomes 0xFFFFFFA7 and `utf8_encode`
+  refuses it. No workaround (the sdl / glfw windows deliver them).
+- `gfx_set_mouse_position` takes screen coordinates on the win32 window (SetCursorPos) and window
+  coordinates on the sdl / glfw ones - gfx_input.c does not warp the cursor.
 
 Two of ioq3-rs's gaps do not apply to a static build: gap 6 (clipboard, cursors,
 `gfx_set_mouse_position`, window icon missing from gfx.dll's exports - the static library has
@@ -215,6 +276,10 @@ redefined), as gfx's own build does.
 ## Open problems / accepted differences from renderer_opengl1
 
 - renderer_gfx draws nothing but clears until phase 3 (2D) / 4 (3D); `cl_renderer opengl1` plays.
+- Non-ASCII characters (`å ä ö`) cannot be typed on the win32 window (gfx gap above); the sdl /
+  glfw windows and the SDL path type them.
+- On release of a grabbed mouse the cursor goes back to where the grab started, not to the window
+  center as on the SDL path (gfx_set_mouse_position gap above; ioq3-rs does the same).
 - Fullscreen frames have no overbright on screen until phase 5 (darker than renderer_opengl1
   with its hardware ramp); fullscreen screenshots already have the ramp applied by
   `R_GammaCorrect`.
@@ -236,6 +301,15 @@ redefined), as gfx's own build does.
   through the sdl, glfw and win32 windows; screenshots (`screenshots/shot000n.tga`) must be the
   clear color (255,0,128) - (255,0,255) in fullscreen, where R_GammaCorrect doubles it. Also
   `+devmap q3dm1` fullscreen, `+set r_gfxDevice bogus`, and `+set cl_renderer opengl1`.
+- Phase 2 check (a PowerShell script, not in the tree): start `+devmap q3dm1` windowed with
+  `+set in_keyboardDebug 1 +set cl_showMouseRate 1 +set cl_mouseAccel 0.0001` (showMouseRate
+  prints only with mouse acceleration) and binds that `echo` (F5, MOUSE2, MOUSE4, MWHEELUP,
+  F6 `toggleconsole`); inject with `keybd_event( vk, MapVirtualKey( vk, 0 ), ... )` and
+  `mouse_event`; take the focus with a WinForms window of the script, after an injected F24 key
+  up (Windows lets the process of the last input set the foreground); WM_CLOSE to quit; read
+  `qconsole.log`. Never inject Esc / CapsLock here (this machine swaps them); in game, console
+  text without a slash is sent as chat (`con_autochat`). Windows 11's `Start-Process notepad`
+  returns a launcher, not the Notepad window - do not use it as the focus thief.
 - The game console goes to stderr and `qconsole.log`; gfx's `[gfx] using ...` lines go to
   stdout (ioquake3 is a GUI program on Windows: `Start-Process -RedirectStandardOutput`).
 

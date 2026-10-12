@@ -62,6 +62,8 @@ target_compile_definitions( ${RENDERER_GFX_BINARY} PRIVATE ${RENDERER_GFX_DEFINI
 target_compile_options(     ${RENDERER_GFX_BINARY} PRIVATE ${RENDERER_COMPILE_OPTIONS})
 target_link_libraries(      ${RENDERER_GFX_BINARY} PRIVATE gfx ${RENDERER_LIBRARIES})
 
+# the client's input from renderer_gfx's window (sdl_input.c dispatches to it)
+target_sources(             ${CLIENT_BINARY} PRIVATE ${SOURCE_DIR}/gfx/gfx_input.c)
 target_compile_definitions( ${CLIENT_BINARY} PRIVATE USE_GFX)
 target_link_libraries(      ${CLIENT_BINARY} PRIVATE ${RENDERER_GFX_BINARY} gfx)
 

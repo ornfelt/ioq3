@@ -42,9 +42,10 @@ cmake --build build_nogfx --config RelWithDebInfo
 `opengl2` load the GL renderer dlls as before. `r_gfxDevice` (`gl3`, `gl4` - the default,
 `gles3`, `vk`, `d3d11`, `d3d12`) and `r_gfxWindow` (`sdl` - the default, `glfw`, `win32`, `x11`)
 pick the gfx backends; both are latched, so `vid_restart` applies them, a backend the gfx
-build lacks falls back to the default, and `d3d11` / `d3d12` always open the win32 window. Until
-GFX_STATUS.md's phase 3 renderer_gfx only clears the frame - play with `cl_renderer opengl1`
-meanwhile. The compiled shaders are copied next to the client as
+build lacks falls back to the default, and `d3d11` / `d3d12` always open the win32 window. With
+renderer_gfx the keyboard, text, mouse and window events come from the gfx window
+(`code/gfx/gfx_input.c`); gamepads and sound stay on SDL. Until GFX_STATUS.md's phase 3
+renderer_gfx only clears the frame - play with `cl_renderer opengl1` meanwhile. The compiled shaders are copied next to the client as
 `shaders/<dialect>/`; `code/renderer_gfx/shaders/generate_shaders.ps1` / `.sh` regenerate them.
 
 
