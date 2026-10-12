@@ -11,20 +11,23 @@ This file is the current snapshot; the history is in git.
 The x11 window is Linux only and not built or run here (no Linux machine, no WSL). Phase 7
 (renderergl2 features) is only done when asked. Merging `gfx` into `main` is the user's decision.
 
-**Last run:** ioq3-rs gaps 2 and 10 fixed in gfx ("Fixed in gfx"): GLimp_SetGamma gives the
+**Last run:** ioq3-rs gaps 29 and 30 fixed in gfx ("Fixed in gfx"): a minimize no longer crashes vk
+or logs a d3d11 error, and d3d12 in borderless fullscreen is no longer held to the refresh. Before
+it: ioq3-rs gaps 2 and 10 fixed in gfx ("Fixed in gfx"): GLimp_SetGamma gives the
 window's monitor the gamma ramp (win32, glfw, sdl; applied while the window has the focus, as
 SDL does), so `r_gamma` takes effect at once and fullscreen's overbright is in the ramp; qglClear
 clears the depth or the stencil alone where only one is asked for. Checked on every window
 definition and on gl4, gl3, gles3, d3d11, d3d12 and vk (validation layer clean, no TDR), the
 monitors' ramps saved first and checked unchanged after every run; a Release A/B timedemo.
-Found on the way: gaps 29 (minimize errors on d3d11 / vk) and 30 (d3d12 fullscreen at ~240 fps).
+Found on the way: gaps 29 (minimize errors on d3d11, a crash on vk) and 30 (d3d12 fullscreen
+at the monitor's 240 Hz), both fixed in gfx right after.
 Before it: gap 16 (`r_textureMode` at run time), gaps 1 (most) and 11, gap 24, gaps 12-14, the
 day's A/B timedemo, gaps 26, 25, the win32 client size, 28, 9, 27 and steps 1-3.
 
 **Next:** nothing in phases 0-6. Possible follow-ups, none required: the x11 window and the
 Linux build on a Linux machine (`cmake/gfx.cmake`'s Linux branch follows gfx's CMakeLists.txt;
 gfx's x11 window has the focus helper but no minimize events or gamma ramp yet), gfx fix
-step 4 (read back, gap 3) with a Linux build, gaps 29 and 30 (gfx gaps), phase 7 when asked.
+step 4 (read back, gap 3) with a Linux build, phase 7 when asked.
 
 ## Phases
 
@@ -322,15 +325,6 @@ so the rest are expected here too):
 - ioq3-rs gap 3: no read back of the color or depth buffer (workaround on Windows: the color from
   the screen through GDI, one frame late and only what is visible; no depth, so `r_flares 1`'s
   depth test reads zeros - one warning - and flares show only within ~28 units of the eye).
-- ioq3-rs gap 29 (found here): a minimize logs `gfx: failed to create default depth stencil
-  texture: E_INVALIDARG` on d3d11 and `gfx: failed to create depth image:
-  VK_ERROR_INITIALIZATION_FAILED` on vk - the window's 0x0 size reaches the device's resize, which
-  makes a depth buffer of it. Harmless here (the next restore resizes again), seen with gfx
-  `9226bec` as well; gl and d3d12 log nothing.
-- ioq3-rs gap 30 (found here): d3d12 in borderless fullscreen runs at about 240 fps (timedemo
-  `four`, 1920x1080, 200 Hz monitor) where it runs at about 905 in a 1255x941 window and d3d11 /
-  gl4 / vk at 850 - 950 in the same fullscreen: likely the swapchain going to independent flip
-  without tearing allowed. Seen in every variant of the gaps 2 / 10 A/B, so older than them.
 - Worked around by design since phase 3, as in ioq3-rs (not each seen failing here): gaps 4
   (no depth bias) and 5 (no clip planes) - in the shaders; 17 (no GL_SRC_ALPHA_SATURATE); 18 (`gfx_set_texture_data` takes whole rows); 19
   (unsynchronized stream buffers: rings sized for many frames); 20 (no base vertex: indices
@@ -487,6 +481,22 @@ and wc_clean_new's `lib/gfx` copy), so ioq3-rs's gfx.dll gets them too once rebu
   window (its ClearDepthStencilView). Release timedemo A/B in one build (fullscreen, 2 runs;
   d3d11 4): gl4 918 -> 944, gl3 914 -> 924, gles3 933 -> 945, vk 933 -> 934, d3d11 859 -> 847
   (-1.3%, runs overlapping: 848 - 867 against 834 - 858), d3d12 240 -> 240 (gap 30).
+- **ioq3-rs gaps 29 and 30** (gfx `84fda62`, found here). 29: a minimize gave the device the
+  window's 0x0 size - d3d11 logged E_INVALIDARG for a 0x0 depth texture, and vk made a 0x0
+  swapchain (VUID-VkSwapchainCreateInfoKHR-imageExtent-01689), failed its depth image and left the
+  next frame without a framebuffer: `Received signal 11` on every vk minimize, which the gaps 2 /
+  10 runs had taken for a quicker exit. Now d3d11 / d3d12 skip a resize to 0x0 and vk keeps its
+  swapchain whole while the window (or the surface's current extent) has no area; the restore
+  rebuilds at the real size. 30: d3d12's flip-model swap chain goes to independent flip in
+  borderless fullscreen, where a present without tearing waits for the display - the game's
+  monitor here runs at 240 Hz, so `r_swapInterval 0` gave 240 fps (900 in a window). gfx now
+  creates it with DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING where DXGI has it and presents interval 0
+  with DXGI_PRESENT_ALLOW_TEARING: fullscreen timedemo 240 -> 900 fps (ioq3-rs 884), interval 1
+  still 240. Checked: minimize, then a restore from outside after 2 s, then a screenshot, on
+  d3d11, d3d12, gl4 (win32, glfw, sdl) and vk (win32, glfw, sdl; validation layer clean) - no
+  crash, no gfx line, the full-size frame after the restore (ioq3-rs: vk on win32 / sdl, d3d11);
+  d3d12 resizes and `vid_restart` without a gfx line, its frame against gl4 (0.05% of the world
+  region differs).
 - **ioq3-rs gap 16** (gfx `9226bec`): `gfx_set_texture_sampling` (and `gfx_dll_set_texture_sampling`)
   gives a made texture new filters, wrap and anisotropy - an optional device op, on every device
   here: gl3 / gles3 set the parameters on the bound texture, gl4 through DSA, d3d11 makes a new
