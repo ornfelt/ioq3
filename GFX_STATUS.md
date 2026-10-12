@@ -11,20 +11,22 @@ This file is the current snapshot; the history is in git.
 The x11 window is Linux only and not built or run here (no Linux machine, no WSL). Phase 7
 (renderergl2 features) is only done when asked. Merging `gfx` into `main` is the user's decision.
 
-**Last run:** three more gfx fixes ("Fixed in gfx"), no ioq3 code change: ioq3-rs gap 26 (a vk
-device that fails to initialize falls back to gl4 instead of crashing - checked with SwiftShader
-refused as the only driver), gap 25 (vk takes a device without geometry shaders, so SwiftShader
-runs q3dm0, validation layer clean, and GFX_TESTING.md's GPU safety starts vk changes on it; the
-GPU is still chosen when both are there), and the win32 window's client size (it grows its
-client area like glfw: r_mode 4 is 1255x941 on both; the win32 / glfw desktop-sized window is cut
-down to the work area, 1904x993, whole HUD visible). build_gfx rebuilt after each; vk on the GPU
-with the validation layer clean, no TDR. Before them: gaps 28, 9, 27 and steps 1-3 of the
-recommended gfx fixes.
+**Last run:** ioq3-rs gaps 12-14 fixed in gfx ("Fixed in gfx"): a focus query, minimize /
+restore events and key ups on focus loss; gfx_input.c's three workarounds are gone (the
+foreground-process check, the key bookkeeping that released keys and turned a repeat into a press,
+com_minimized from a 0x0 resize). build_gfx and build_nogfx rebuilt; checked with a test program
+on gfx (win32, glfw, sdl: a key held while the focus goes to another window gets its KEY_UP before
+FOCUS_OUT, `gfx_window_has_focus` follows, the next press is a KEY_DOWN, MINIMIZE / RESTORE) and in
+the game on the three windows (a held key's up reaches the client at a minimize, `com_minimized`
+1 while minimized and 0 after the restore, the input check). Before it: an A/B timedemo of today's
+gfx and ioq3 against those before the first fix, every device and window - no change beyond the
+run-to-run spread (Performance). Before that: gaps 26, 25, the win32 client size, 28, 9, 27 and
+steps 1-3 of the recommended gfx fixes.
 
 **Next:** nothing in phases 0-6. Possible follow-ups, none required: the x11 window and the
-Linux build on a Linux machine (`cmake/gfx.cmake`'s Linux branch follows gfx's CMakeLists.txt),
-the focus / minimize / key-up gaps (ioq3-rs 12-14, workarounds in gfx_input.c), gfx fix step 4
-(read back, gap 3) with a Linux build, phase 7 when asked.
+Linux build on a Linux machine (`cmake/gfx.cmake`'s Linux branch follows gfx's CMakeLists.txt;
+gfx's x11 window has the focus helper but no minimize events yet), gfx fix step 4 (read back,
+gap 3) with a Linux build, phase 7 when asked.
 
 ## Phases
 
@@ -227,12 +229,12 @@ the focus / minimize / key-up gaps (ioq3-rs 12-14, workarounds in gfx_input.c), 
   coordinates on the win32 window and window coordinates on the others, so ioq3-rs's behaviour is
   kept). Buttons: left / right / middle as K_MOUSE1-3, the rest by SDL's button number (X1 / X2
   as K_MOUSE4 / 5, then K_AUX as the SDL formula), which is gfx's number plus one on every gfx
-  window. Focus: gfx has no query, so IN_GfxInit asks Windows
-  whether the foreground window is this process's (elsewhere: focused), and IN_Init's
-  `com_unfocused` follows it; FOCUS_IN / FOCUS_OUT after that; focus loss sends the key ups of
-  the keys reported down (SDL does that itself) and a re-press arriving as a repeat counts as a
-  press. Resize: only a size other than the last one, only with `r_allowResize`, then the SDL
-  path's delayed `vid_restart`; a 0x0 size (win32 minimized) sets `com_minimized`. CLOSE runs
+  window. Focus: IN_GfxInit takes `gfx_window_has_focus` (the win32 window takes the focus
+  before the handler is set) and IN_Init's `com_unfocused` follows it; FOCUS_IN / FOCUS_OUT after
+  that; gfx sends the key ups of the keys still down before FOCUS_OUT, as SDL does, so a KEY_PRESS
+  is always a repeat. MINIMIZE / RESTORE set `com_minimized`. Resize: only a size other than the
+  last one, only with `r_allowResize`, then the SDL path's delayed `vid_restart`; win32's 0x0
+  size of a minimized window is ignored. CLOSE runs
   `quit Closed window`. SDL keeps joysticks / gamepads and audio: IN_ProcessSDLDeviceEvents takes
   the gamepad hot-plug and SDL_QUIT events out of SDL's queue (SDL_PeepEvents) before gfx's sdl
   window polls it.
@@ -309,11 +311,6 @@ so the rest are expected here too):
   map it by position to GFX_KEY_GRAVE (the console key). The SDL path makes it K_WORLD_53, which
   is no console key either, so the console does not open from it on the SDL path or the sdl gfx
   window alike (bind a key to `toggleconsole`, or Shift+Esc).
-- ioq3-rs gap 12: no focus query, the win32 window takes the focus before a handler is set
-  (workaround: GetForegroundWindow's process on Windows).
-- ioq3-rs gap 13: no minimize / restore event (win32's 0x0 resize is used).
-- ioq3-rs gap 14: no key ups on focus loss, a key held over it comes back as KEY_PRESS
-  (workaround in gfx_input.c).
 - Worked around by design since phase 3, as in ioq3-rs (not each seen failing here): gaps 4
   (no depth bias) and 5 (no clip planes) - in the shaders; 16 (sampling fixed at texture
   creation); 17 (no GL_SRC_ALPHA_SATURATE); 18 (`gfx_set_texture_data` takes whole rows); 19
@@ -415,6 +412,18 @@ and wc_clean_new's `lib/gfx` copy), so ioq3-rs's gfx.dll gets them too once rebu
   3840x2160) and in the game (gl4, d3d11, vk with the validation layer, the input check on win32;
   `r_mode -2` on win32 and glfw with the whole HUD in the screenshot). The timedemo row "gl4,
   win32 window" below was measured at the old 1904x1041.
+- **ioq3-rs gaps 12-14** (gfx `92ef95c`): `gfx_window_has_focus` (and `gfx_dll_window_has_focus`)
+  answers from a flag every backend keeps with or without a handler, set from the system when
+  the win32 / glfw / sdl window is made or shown; `GFX_EVENT_MINIMIZE` / `GFX_EVENT_RESTORE`
+  (after `GFX_EVENT_CLOSE`, the old values unchanged) come when that changes - win32 WM_SIZE, glfw's
+  iconify callback, sdl's window events; x11 has none yet; on a focus loss the keys still down
+  get their KEY_UP before FOCUS_OUT (`gfx_window_focus_event`, also used by x11), so a key held
+  over the switch is not left down and its next press is a KEY_DOWN, and the glfw / sdl windows
+  send a key up only for a key gfx has down (both release held keys themselves after a focus loss;
+  glfw's came out twice). gfx_input.c lost `IN_GfxWindowHasOSFocus`, `IN_GfxReleaseKeys` and
+  `keysDown`, and the 0x0 resize no longer sets `com_minimized`. Note: glfw's own focus flag (its
+  starting value) means active in its thread, so a glfw window started behind another program
+  reports the focus where win32 / sdl do not.
 
 ### Recommended order for the gfx fixes
 
@@ -530,3 +539,24 @@ unless noted, renderers run alternately:
 gl4 is at parity with renderer_opengl1: both are CPU bound at ~1.1 ms a frame, and the runs
 spread by a few percent either way; the other devices are one run each. No Release-gfx step was needed (ioq3-rs's gap 8): gfx is
 compiled in the build's configuration.
+
+Today's gfx fixes against the gfx and ioq3 before the first of them (gfx `4463b85`, ioq3
+`4b08076d`, built from `git archive` into a scratch folder), Release, the settings above, 5 runs
+each, before and after alternating, means (runs spread ±3-5%):
+
+| device / window | drawn before | drawn after | fps before | fps after |
+| --- | --- | --- | --- | --- |
+| gl4 / sdl | 1920x1080 | 1920x1080 | 935 | 926 |
+| gl3 / sdl | 1920x1080 | 1920x1080 | 895 | 910 |
+| gles3 / sdl | 1920x1080 | 1920x1080 | 899 | 911 |
+| vk / sdl | 1920x1080 | 1920x1080 | 926 | 926 |
+| gl4 / win32 | 1904x1041 | 1904x993 | 915 | 928 |
+| d3d11 / win32 | 1904x1041 | 1904x993 | 675 | 697 |
+| d3d12 / win32 | 1904x1041 | 1904x993 | 889 | 888 |
+| vk / win32 | 1904x1041 | 1904x993 | 916 | 932 |
+| gl4 / glfw | 1920x1061 | 1904x993 | 932 | 929 |
+| vk / glfw | 1920x1061 | 1904x993 | 926 | 934 |
+
+No device or window got slower: the sdl rows, drawn at the same size, move -0.9% to +1.6%; the
+win32 / glfw desktop-sized windows draw ~5% fewer pixels now (the work-area cut), their small gains
+within the same spread. No TDR. Gaps 12-14 came after this run; they touch only events.

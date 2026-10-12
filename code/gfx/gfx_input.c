@@ -18,10 +18,6 @@ allocated per event.
 #include "gfx/window.h"
 #include "gfx_input.h"
 
-#ifdef _WIN32
-#include <windows.h>
-#endif
-
 // events one poll can hold before the newest are dropped (a power of two). SDL's queue holds
 // 65535; a frame of gfx events is a handful, a stalled frame (a map load) a few hundred moves.
 #define GFX_EVENT_QUEUE_SIZE	1024
@@ -43,11 +39,7 @@ static struct
 	// events the handler could not queue since the last drain
 	int					dropped;
 
-	// the gfx keys reported down to the client, so focus loss can release them and a held key's
-	// repeat after the focus came back counts as its press
-	qboolean			keysDown[GFX_KEY_LAST];
-
-	// gfx has no focus query: FocusIn / FocusOut since IN_GfxInit
+	// gfx_window_has_focus at IN_GfxInit, then FOCUS_IN / FOCUS_OUT
 	qboolean			focused;
 
 	// the pointer position the next MOUSE_MOVE is measured from (gfx's virtual position while
@@ -105,29 +97,6 @@ static qboolean IN_GfxNextEvent( struct gfx_event *event )
 
 /*
 ===============
-IN_GfxWindowHasOSFocus
-
-Whether the window gfx just created has the focus. gfx cannot say (no focus query, and the win32
-window takes the focus before the handler is set, so no FOCUS_IN follows); a window started
-behind another program must not grab the cursor. On Windows the foreground window is asked
-whether it belongs to this process - the only window the client has is gfx's; elsewhere the
-window is taken as focused, as gfx's window systems there report the first focus as an event.
-===============
-*/
-static qboolean IN_GfxWindowHasOSFocus( void )
-{
-#ifdef _WIN32
-	DWORD processId = 0;
-
-	GetWindowThreadProcessId( GetForegroundWindow( ), &processId );
-	return processId == GetCurrentProcessId( ) ? qtrue : qfalse;
-#else
-	return qtrue;
-#endif
-}
-
-/*
-===============
 IN_GfxResetMousePosition
 
 The pointer position gfx reports now becomes the start of the next motion delta.
@@ -149,9 +118,10 @@ void IN_GfxInit( struct gfx_window *window )
 	gfxInput.head = 0;
 	gfxInput.len = 0;
 	gfxInput.dropped = 0;
-	Com_Memset( gfxInput.keysDown, 0, sizeof( gfxInput.keysDown ) );
-	// FOCUS_IN / FOCUS_OUT say when it changes from here on
-	gfxInput.focused = IN_GfxWindowHasOSFocus( );
+	// the window may have taken the focus before the handler was set (win32 does at creation), and a
+	// window started behind another program must not grab the cursor; FOCUS_IN / FOCUS_OUT say when
+	// it changes from here on
+	gfxInput.focused = gfx_window_has_focus( window ) ? qtrue : qfalse;
 	IN_GfxResetMousePosition( window );
 	gfxInput.width = gfx_window_get_width( window );
 	gfxInput.height = gfx_window_get_height( window );
@@ -502,47 +472,20 @@ static void IN_GfxChar( int eventTime, uint32_t codepoint )
 
 /*
 ===============
-IN_GfxReleaseKeys
-
-The window lost the focus: release the keys gfx reported down. SDL resets its keyboard state on
-focus loss and sends their key ups; gfx keeps them down and sends nothing, so without this a key
-held while alt-tabbing away (alt itself) would stay down in the client.
-===============
-*/
-static void IN_GfxReleaseKeys( int eventTime )
-{
-	int gfxKey;
-
-	for( gfxKey = 0; gfxKey < GFX_KEY_LAST; gfxKey++ )
-	{
-		if( gfxInput.keysDown[gfxKey] )
-		{
-			gfxInput.keysDown[gfxKey] = qfalse;
-			IN_GfxKeyUp( eventTime, (enum gfx_key_code)gfxKey, 0 );
-		}
-	}
-}
-
-/*
-===============
 IN_GfxResize
 
-A window resize from gfx: the SDL_WINDOWEVENT_RESIZED case of IN_ProcessEvents, plus minimize.
+A window resize from gfx: the SDL_WINDOWEVENT_RESIZED case of IN_ProcessEvents.
 gfx reports a size change of any origin (the initial size at show, display scaling) where SDL's
 RESIZED is the user's alone, so only a size other than the last one counts, and only when
-r_allowResize lets the user resize the window, as it does for the SDL window. win32 reports a
-minimized window as 0x0 (gfx has no minimize event). qtrue when the delayed vid_restart is due.
+r_allowResize lets the user resize the window, as it does for the SDL window. A minimized win32
+window reports 0x0, which is no size to restart at (MINIMIZE sets com_minimized). qtrue when the
+delayed vid_restart is due.
 ===============
 */
 static qboolean IN_GfxResize( unsigned int width, unsigned int height )
 {
 	if( width == 0 || height == 0 )
-	{
-		Cvar_SetValue( "com_minimized", 1 );
 		return qfalse;
-	}
-	if( Cvar_VariableIntegerValue( "com_minimized" ) )
-		Cvar_SetValue( "com_minimized", 0 );
 
 	if( gfxInput.width == width && gfxInput.height == height )
 		return qfalse;
@@ -595,26 +538,18 @@ qboolean IN_GfxProcessEvents( struct gfx_window *window, int eventTime, qboolean
 		{
 			case GFX_EVENT_KEY_DOWN:
 			case GFX_EVENT_KEY_PRESS:
-				{
-					qboolean repeat;
+				if( (unsigned int)e.key.key >= GFX_KEY_LAST )
+					break;
 
-					if( (unsigned int)e.key.key >= GFX_KEY_LAST )
-						break;
-
-					// a repeat of a key the client was told is up (released on focus loss and
-					// still held when the focus came back) is its press
-					repeat = ( e.type == GFX_EVENT_KEY_PRESS && gfxInput.keysDown[e.key.key] ) ? qtrue : qfalse;
-					gfxInput.keysDown[e.key.key] = qtrue;
-					IN_GfxKeyDown( eventTime, e.key.key, e.key.mods, repeat );
-				}
+				IN_GfxKeyDown( eventTime, e.key.key, e.key.mods,
+					e.type == GFX_EVENT_KEY_PRESS ? qtrue : qfalse );
 				break;
 
 			case GFX_EVENT_KEY_UP:
-				// already released on focus loss
-				if( (unsigned int)e.key.key >= GFX_KEY_LAST || !gfxInput.keysDown[e.key.key] )
+				// gfx also sends these for the keys still down when the window loses the focus
+				if( (unsigned int)e.key.key >= GFX_KEY_LAST )
 					break;
 
-				gfxInput.keysDown[e.key.key] = qfalse;
 				IN_GfxKeyUp( eventTime, e.key.key, e.key.mods );
 				break;
 
@@ -665,8 +600,15 @@ qboolean IN_GfxProcessEvents( struct gfx_window *window, int eventTime, qboolean
 
 			case GFX_EVENT_FOCUS_OUT:
 				gfxInput.focused = qfalse;
-				IN_GfxReleaseKeys( eventTime );
 				Cvar_SetValue( "com_unfocused", 1 );
+				break;
+
+			case GFX_EVENT_MINIMIZE:
+				Cvar_SetValue( "com_minimized", 1 );
+				break;
+
+			case GFX_EVENT_RESTORE:
+				Cvar_SetValue( "com_minimized", 0 );
 				break;
 
 			case GFX_EVENT_RESIZE:
