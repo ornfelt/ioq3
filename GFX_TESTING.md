@@ -120,6 +120,16 @@ Run the renderers alternately a few times; the numbers are in GFX_STATUS.md, Per
 Faulty Vulkan or D3D12 use can hang or reset the GPU driver, not only the game. Test them only
 after the same feature works on gl4, and then:
 
+- run a new vk change on SwiftShader first, a Vulkan on the CPU that cannot touch the GPU. Chrome
+  and Edge ship it; point the Vulkan loader at its manifest for the run, so it is the only driver:
+
+  ```powershell
+  $env:VK_DRIVER_FILES = (Get-ChildItem "C:\Program Files\Google\Chrome\Application\*\vk_swiftshader_icd.json" | Select-Object -First 1).FullName
+  # ... the scripted run with +set r_gfxDevice vk (slow: ~25 fps for q3dm0 at r_mode 4) ...
+  Remove-Item Env:VK_DRIVER_FILES
+  ```
+
+  gfx's vk device takes it since gfx `d7fe379` (it has no geometry shaders); then the GPU;
 - run with the Khronos validation layer. ioq3-rs built one (its `GFX_TESTING.md` says how) in
   `Code2\Rust\ioq3-rs\target\tools\vvl`; the client started from a shell with these set loads it:
 

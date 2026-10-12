@@ -393,6 +393,14 @@ and wc_clean_new's `lib/gfx` copy), so ioq3-rs's gfx.dll gets them too once rebu
   was made. Checked with SwiftShader as the only Vulkan driver (refused then, gap 25): "no
   suitable physical device found", then `Falling back on r_gfxDevice gl4, r_gfxWindow sdl` on the
   sdl and win32 windows, validation layer clean.
+- **ioq3-rs gap 25** (gfx `d7fe379`): the vk device takes a physical device without geometry
+  shaders or anisotropic sampling when no device has both, so a software Vulkan (SwiftShader,
+  which has no geometry shaders) is no longer refused; a device with both is still chosen first,
+  and one without them drops `GFX_DEVICE_OPT1_GEOMETRY_SHADER` and reports `max_anisotropy` 1
+  (renderer_gfx's anisotropy then stays off there). With Chrome's SwiftShader as the only driver
+  vk draws q3dm0 (`devmap`, screenshot, `vid_restart`, quit) with the validation layer clean;
+  with SwiftShader listed before the AMD driver the GPU is still chosen (1000 frames in 7.6 s,
+  SwiftShader alone 39.5 s). So vk runs can start on the CPU now (GFX_TESTING.md, GPU safety).
 
 ### Recommended order for the gfx fixes
 
