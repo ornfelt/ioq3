@@ -62,8 +62,10 @@ $B = "$env:code_root_dir/Code2/C/ioq3/build_gfx/RelWithDebInfo"
 - The console prints `gfx device: <device>, window: <window>`; `gfxinfo` lists the backends this
   gfx build has. gfx's own `[gfx] using ...` lines go to stdout, which a GUI program only shows
   when redirected (`Start-Process -RedirectStandardOutput`).
-- **GL4 first.** Every feature is checked on gl4 before any other device. The other devices are
-  phase 6 of GFX_STATUS.md - until it is done, run them only as that section says.
+- **GL4 first.** Every feature is checked on gl4 before any other device; vk and d3d12 then only
+  as "Vulkan and D3D12: GPU safety" says. What works where is GFX_STATUS.md's Backends table.
+- gles3 is a little darker than gl3 / gl4 on the sdl and win32 windows (`shaders_gles3_dark`,
+  gfx's Windows gles3 gamma fix); glfw's gles3 uses the plain shaders.
 
 ## Scripted checks
 
@@ -118,10 +120,22 @@ Run the renderers alternately a few times; the numbers are in GFX_STATUS.md, Per
 Faulty Vulkan or D3D12 use can hang or reset the GPU driver, not only the game. Test them only
 after the same feature works on gl4, and then:
 
-- run with the Khronos validation layer (ioq3-rs's `GFX_TESTING.md` shows how it was built:
-  `$env:VK_ADD_LAYER_PATH`, `$env:VK_INSTANCE_LAYERS = "VK_LAYER_KHRONOS_validation"`,
-  `$env:VK_KHRONOS_VALIDATION_LOG_FILENAME`), or D3D12's debug layer (needs Windows' Graphics
-  Tools);
+- run with the Khronos validation layer. ioq3-rs built one (its `GFX_TESTING.md` says how) in
+  `Code2\Rust\ioq3-rs\target\tools\vvl`; the client started from a shell with these set loads it:
+
+  ```powershell
+  $env:VK_ADD_LAYER_PATH = "$env:code_root_dir\Code2\Rust\ioq3-rs\target\tools\vvl\build\layers\Release"
+  $env:VK_INSTANCE_LAYERS = "VK_LAYER_KHRONOS_validation"
+  $env:VK_KHRONOS_VALIDATION_LOG_FILENAME = "$env:TEMP\ioq3-gfx-vvl.txt"
+  # ... the scripted run with +set r_gfxDevice vk ...
+  Remove-Item Env:VK_ADD_LAYER_PATH, Env:VK_INSTANCE_LAYERS, Env:VK_KHRONOS_VALIDATION_LOG_FILENAME
+  ```
+
+  Two messages are gfx's and expected at every run (GFX_STATUS.md, gfx gaps):
+  `VUID-vkQueueSubmit-pSignalSemaphores-00067` and, at quit, `VUID-vkDestroyDevice-device-05137`
+  (two VkDeviceMemory). Anything else is new - stop and look. D3D12's debug layer needs Windows'
+  Graphics Tools (`d3d12SDKLayers.dll`), not installed here, and a Debug build (gfx asks for it
+  only without `NDEBUG`);
 - keep runs short and scripted (`+quit` after a few hundred frames), one at a time, and stop at
   the first validation error or device-lost;
 - afterwards look for a driver reset (TDR) in the System log:

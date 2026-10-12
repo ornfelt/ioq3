@@ -6,22 +6,26 @@ Work happens on the `gfx` branch; `main` stays the plain fork. The design follow
 finished renderer_gfx (`$code_root_dir/Code2/Rust/ioq3-rs`, `gfx` branch, its `GFX_STATUS.md`).
 This file is the current snapshot; the history is in git.
 
-**Last run:** phases 4 and 5. Phase 4 needed no code: the 3D that came with phase 3 matches
-renderer_opengl1 on gl4 (sdl window, RelWithDebInfo, screenshots side by side): q3dm0's mirror
-and portal camera, q3dm12's fog and sky, plasma / rocket dynamic lights, marks and brass, blob
-and stencil shadows (`cg_shadows 1` / `2`), md3 players and weapons in first and third person,
-`r_primitives 1`, `r_showtris` / `r_shownormals`, `vid_restart` in a map with
-`r_vertexlight 1`; a full q3dm1 game with four bots; `screenshot`, `screenshotJPEG` and video
-capture (`video` in `demo four`). Phase 5: overbright as end-of-frame blend passes
-(`GfxGL_Overbright`, called by GLimp_EndFrame) and glReadPixels shifting them out again - a
-fullscreen (`r_mode -2`) capture matches renderer_opengl1's, and a window with the default
-`r_ignorehwgamma 0` too; `timedemo` on gl4 in Release is at parity (Performance).
+**Done.** Phases 0-6 are complete on Windows: every device and window gfx builds here works
+(Backends), a full game on gl4 matches renderer_opengl1, and gl4 is as fast as renderer_opengl1.
+The x11 window is Linux only and not built or run here (no Linux machine, no WSL). Phase 7
+(renderergl2 features) is only done when asked. Merging `gfx` into `main` is the user's decision.
 
-**Next:** phase 6 - the other devices and windows, gl4's checks on each (q3dm0's mirror / portal
-views, the video sign, HUD; ioq3-rs's Backends section): gl3 and gles3 on sdl / glfw / win32,
-d3d11 (win32), then d3d12 with its debug layer if Graphics Tools are installed, then vk with the
-Khronos validation layer (ioq3-rs built one in `target/tools/vvl/`, GFX_TESTING.md) - one short
-scripted run at a time, the System log checked for TDR events (4101) after each GPU run.
+**Last run:** phases 4, 5 and 6. Phase 4 needed no code: the 3D that came with phase 3 matches
+renderer_opengl1 on gl4 (q3dm0's mirror and portal camera, q3dm12's fog and sky, dynamic lights,
+marks, blob and stencil shadows, md3 models, `r_primitives`, debug draws, `vid_restart` in a
+map, a full q3dm1 game with four bots, `screenshot` / `screenshotJPEG` / video capture). Phase 5:
+overbright as end-of-frame blend passes (`GfxGL_Overbright`) with glReadPixels shifting them out
+again - fullscreen and windowed frames match renderer_opengl1's - and Release timedemo at
+parity. Phase 6 needed no code either (phase 3 already had ioq3-rs's D3D / Vulkan fixes): gl3,
+gles3 and vk on the sdl, glfw and win32 windows, d3d11 and d3d12 on win32, draw q3dm0 like gl4;
+vk with the Khronos validation layer reports only two gfx messages; runtime switches between
+devices and windows with `vid_restart`; a timedemo on every device; no driver reset (event 4101).
+
+**Next:** nothing in phases 0-6. Possible follow-ups, none required: the x11 window and the
+Linux build on a Linux machine (`cmake/gfx.cmake`'s Linux branch follows gfx's CMakeLists.txt),
+the gfx gaps below once gfx has them (e.g. a depth read back for flares, gap 3), phase 7 when
+asked.
 
 ## Phases
 
@@ -61,8 +65,10 @@ scripted run at a time, the System log checked for TDR events (4101) after each 
   overbright shift out), `gfx_glimp.c` (GLimp_EndFrame draws it before the swap). Frame
   comparisons windowed (both `r_ignorehwgamma` values) and fullscreen; `timedemo` on gl4 in
   Release at parity with renderer_opengl1 - done.
-- [ ] **6. All backends** - gl3, gles3, d3d11, d3d12, vk (validation layer); sdl, glfw, win32
-  windows; x11 on Linux.
+- [x] **6. All backends** - no new code. Every device on every window gfx makes it on, checked on
+  q3dm0 (Backends) with the Khronos validation layer for vk and the TDR check after each GPU run;
+  device / window switches with `vid_restart`; timedemo per device. x11 is Linux only - done on
+  Windows.
 - [ ] 7. Optional, only when asked: renderergl2 features on gfx.
 
 ## Decisions
@@ -273,18 +279,24 @@ scripted run at a time, the System log checked for TDR events (4101) after each 
 "2D": the console, the main menu and a cinematic draw like renderer_opengl1, `vid_restart` in
 and out, clean quit; "+ input": phase 2's input check passes (keys, chars, console key, mouse
 motion / buttons / wheel, focus loss, close); "3D": phase 4's checks and the full q3dm1 game
-match renderer_opengl1, and fullscreen overbright (phase 5); "timedemo": Performance. The other
-devices wait for phase 6 (GPU safety: each feature on gl4 first). The x11 window and the Linux build are untested here (no Linux machine;
+match renderer_opengl1, and fullscreen overbright (phase 5); "timedemo": Performance; "q3dm0":
+the mirror and portal camera views, the video sign and the HUD draw like gl4's (phase 6), start
+and quit cleanly. Input belongs to the window, not the device, so phase 2's check covers every
+device on its window. Every GPU run was followed by the TDR check: no event 4101, d3d12 and vk
+included. The x11 window and the Linux build are untested here (no Linux machine, no WSL;
 `cmake/gfx.cmake`'s Linux branch follows gfx's CMakeLists.txt).
 
 | | sdl | glfw | win32 |
 | --- | --- | --- | --- |
-| gl4 (baseline) | 2D + input + 3D + timedemo | 2D + input | 2D + input + timedemo |
-| gl3 | - | - | - |
-| gles3 | - | - | - |
-| d3d11 | - (uses win32, not run yet) | - (same) | - |
-| d3d12 | - (uses win32, not run yet) | - (same) | - |
-| vk | - | - | - |
+| gl4 (baseline) | 2D + input + 3D + timedemo | 2D + input + q3dm0 | 2D + input + q3dm0 + timedemo |
+| gl3 | q3dm0 + timedemo | q3dm0 | q3dm0 |
+| gles3 | q3dm0 + timedemo (a little darker: `shaders_gles3_dark`) | q3dm0 (plain shaders) | q3dm0 (darker, as sdl) |
+| d3d11 | uses win32 (gfx makes D3D only there; console message) | uses win32 | q3dm0 + timedemo |
+| d3d12 | uses win32 | uses win32 | q3dm0 + timedemo (no debug layer: Graphics Tools missing) |
+| vk | q3dm0 + timedemo, validation layer clean of renderer_gfx | q3dm0, same | q3dm0, same |
+
+`vid_restart` switches devices and windows at run time (checked gl4 / sdl -> d3d11 / win32 -> vk
+/ sdl -> gles3 / glfw -> gl4 / sdl in one map, with the validation layer on).
 
 ## gfx gaps (for the gfx maintainer)
 
@@ -320,8 +332,16 @@ so the rest are expected here too):
   rebased); 21 (no `invariant` / `precise`: one program); 22 (no push constants: a ring write and
   `gfx_bind_constant` per uniform change); 23 (GL clip depth on D3D / Vulkan: remapped in
   generic.vs); 24 (d3d11's WRITE_DISCARD per write: one-draw buffers).
+- ioq3-rs gap 27: the vk swapchain reuses its semaphores per frame in flight, not per swapchain
+  image - VUID-vkQueueSubmit-pSignalSemaphores-00067 once per vk start, on every window.
 
 New here (ioq3-rs has the same behaviour, unrecorded):
+
+- The vk device leaks its VMA memory at shutdown: `vk_dtr` (devices/vk.c) destroys the VkDevice
+  without `vmaDestroyAllocator`, so VMA's memory blocks are never freed - the validation layer
+  reports VUID-vkDestroyDevice-device-05137 ("2 leaked objects", two VkDeviceMemory) at every
+  vk shutdown (quit or `vid_restart`). renderer_gfx deletes every gfx object it made before the
+  device. Harmless at quit; each vk `vid_restart` leaks the blocks once.
 
 - The sdl window numbers the mouse buttons past middle as SDL does (`get_button` returns SDL's
   number: X1 = 4 = GFX_MOUSE_BUTTON_5), the win32 / glfw windows one lower (X1 =
@@ -365,6 +385,11 @@ redefined), as gfx's own build does.
 - `r_primitives 1` on renderer_gfx matches the default path and renderer_opengl1's default;
   renderer_opengl1's own `r_primitives 1` frame differs from its default on this AMD driver
   (darker, bluer lightmapped walls) - the driver's, not renderer_gfx's.
+- gles3 is a little darker than gl3 / gl4 on the sdl and win32 windows: gfx's compiler adds its
+  Windows gles3 gamma fix to `shaders_gles3_dark` (glfw's gles3 uses the plain shaders), as in
+  ioq3-rs.
+- d3d11 is slower than the other devices (692 fps against ~900-950): its stream buffers are
+  written WRITE_DISCARD per draw (gap 24).
 - Not checked: md4 / iqm models (baseq3 has none) and the x11 window (Linux).
 - Not ioq3-gfx: the RelWithDebInfo client (main's `build/` too) crashes with an access
   violation in JIT-compiled QVM code right after `ui.qvm` loads, whatever the renderer. Run
@@ -429,7 +454,12 @@ unless noted, renderers run alternately:
 | renderer_opengl1 | 907 - 952 (4 runs) |
 | renderer_gfx gl4 | 910 - 933 (4 runs) |
 | renderer_gfx gl4, win32 window | 942 |
+| renderer_gfx gl3 | 897 |
+| renderer_gfx gles3 | 902 |
+| renderer_gfx vk | 950 |
+| renderer_gfx d3d12 (win32) | 916 |
+| renderer_gfx d3d11 (win32), one-draw buffers (gap 24) | 692 |
 
 gl4 is at parity with renderer_opengl1: both are CPU bound at ~1.1 ms a frame, and the runs
-spread by a few percent either way. No Release-gfx step was needed (ioq3-rs's gap 8): gfx is
+spread by a few percent either way; the other devices are one run each. No Release-gfx step was needed (ioq3-rs's gap 8): gfx is
 compiled in the build's configuration.
