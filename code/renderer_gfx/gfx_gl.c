@@ -439,6 +439,21 @@ static void GfxGL_MinFiltering( GLenum filter, enum gfx_filtering *min, enum gfx
 	}
 }
 
+// GL's texture parameters as gfx's sampling of a texture with levels levels
+static void GfxGL_GfxSampling( const gfxGlSampling_t *sampling, int levels, struct gfx_texture_sampling *out )
+{
+	GfxGL_MinFiltering( sampling->minFilter, &out->min_filtering, &out->mip_filtering );
+	if ( levels == 1 ) {
+		// GL would call a mipmapped texture without its levels incomplete; level 0 it is
+		out->mip_filtering = GFX_FILTERING_NONE;
+	}
+	out->mag_filtering = sampling->magFilter == GL_NEAREST ? GFX_FILTERING_NEAREST : GFX_FILTERING_LINEAR;
+	out->addressing_s = GfxGL_Addressing( sampling->wrapS );
+	out->addressing_t = GfxGL_Addressing( sampling->wrapT );
+	out->addressing_r = GfxGL_Addressing( sampling->wrapT );
+	out->anisotropy = sampling->anisotropy;
+}
+
 /*
 ===============
 GfxGL_FlushStaging
@@ -451,9 +466,9 @@ static void GfxGL_FlushStaging( void )
 	gfxGlStaging_t *staging = &gfxGl.staging;
 	gfxGlTexture_t *texture;
 	gfxGlSampling_t sampling;
+	struct gfx_texture_sampling gfxSampling;
 	struct gfx_texture_create_info info;
 	struct gfx_texture *made;
-	enum gfx_filtering minFiltering, mipFiltering;
 	int level, width, height;
 
 	if ( !staging->name ) {
@@ -466,11 +481,7 @@ static void GfxGL_FlushStaging( void )
 	}
 
 	GfxGL_CurrentSampling( texture, &sampling );
-	GfxGL_MinFiltering( sampling.minFilter, &minFiltering, &mipFiltering );
-	if ( staging->levels == 1 ) {
-		// GL would call a mipmapped texture without its levels incomplete; level 0 it is
-		mipFiltering = GFX_FILTERING_NONE;
-	}
+	GfxGL_GfxSampling( &sampling, staging->levels, &gfxSampling );
 
 	Com_Memset( &info, 0, sizeof( info ) );
 	info.type = GFX_TEXTURE_2D;
@@ -480,13 +491,13 @@ static void GfxGL_FlushStaging( void )
 	info.width = (uint32_t)texture->width;
 	info.height = (uint32_t)texture->height;
 	info.depth = 1;
-	info.addressing_s = GfxGL_Addressing( sampling.wrapS );
-	info.addressing_t = GfxGL_Addressing( sampling.wrapT );
-	info.addressing_r = GfxGL_Addressing( sampling.wrapT );
-	info.min_filtering = minFiltering;
-	info.mag_filtering = sampling.magFilter == GL_NEAREST ? GFX_FILTERING_NEAREST : GFX_FILTERING_LINEAR;
-	info.mip_filtering = mipFiltering;
-	info.anisotropy = sampling.anisotropy;
+	info.addressing_s = gfxSampling.addressing_s;
+	info.addressing_t = gfxSampling.addressing_t;
+	info.addressing_r = gfxSampling.addressing_r;
+	info.min_filtering = gfxSampling.min_filtering;
+	info.mag_filtering = gfxSampling.mag_filtering;
+	info.mip_filtering = gfxSampling.mip_filtering;
+	info.anisotropy = gfxSampling.anisotropy;
 	if ( !gfx_create_texture( gfxGl.device, &info, &made ) ) {
 		ri.Printf( PRINT_WARNING, "gfx: cannot create a %dx%d texture\n", texture->width, texture->height );
 		return;
@@ -498,6 +509,8 @@ static void GfxGL_FlushStaging( void )
 	}
 	texture->texture = made;
 	texture->made = sampling;
+	texture->levels = staging->levels;
+	texture->resample = qfalse;
 }
 
 static enum gfx_blend_function GfxGL_BlendFunction( GLenum factor )
@@ -675,6 +688,35 @@ static void GfxGL_Uniforms( gfxUniforms_t *uniforms )
 
 /*
 ===============
+GfxGL_Resample
+
+Gives a gfx texture the sampling set on it since it was made (r_textureMode at run time sets the
+filters of every image, two calls each): once, at its next draw. A device that cannot change it
+(gfx_set_texture_sampling false) keeps the old one; the images made after the next vid_restart
+get the new one.
+===============
+*/
+static void GfxGL_Resample( gfxGlTexture_t *texture )
+{
+	gfxGlSampling_t sampling;
+	struct gfx_texture_sampling gfxSampling;
+
+	texture->resample = qfalse;
+	GfxGL_CurrentSampling( texture, &sampling );
+	if ( !memcmp( &sampling, &texture->made, sizeof( sampling ) ) ) {
+		return;
+	}
+	GfxGL_GfxSampling( &sampling, texture->levels, &gfxSampling );
+	if ( gfx_set_texture_sampling( gfxGl.device, texture->texture, &gfxSampling ) ) {
+		texture->made = sampling;
+	} else if ( !gfxGl.warnedResample ) {
+		gfxGl.warnedResample = qtrue;
+		ri.Printf( PRINT_WARNING, "gfx: texture filtering changes apply after a vid_restart on this device\n" );
+	}
+}
+
+/*
+===============
 GfxGL_Submit
 
 Draws vertices with GL's current state: indexed by indices (relative to the first vertex) when
@@ -692,6 +734,9 @@ static void GfxGL_Submit( gfxPrimitiveKey_t primitive, const gfxVertex_t *vertic
 	GfxGL_Uniforms( &state.uniforms );
 	for ( unit = 0; unit < GFX_GL_TEXTURE_UNITS; unit++ ) {
 		texture = GfxGL_BoundTexture( unit );
+		if ( texture && texture->resample && texture->texture ) {
+			GfxGL_Resample( texture );
+		}
 		state.textures[unit] = texture ? texture->texture : NULL;
 	}
 	state.lineWidth = gfxGl.lineWidth;
@@ -1566,7 +1611,6 @@ void APIENTRY qglBindTexture( GLenum target, GLuint texture )
 void APIENTRY qglTexParameterf( GLenum target, GLenum pname, GLfloat param )
 {
 	gfxGlTexture_t *texture = GfxGL_BoundTexture( gfxGl.activeTexture );
-	gfxGlSampling_t sampling;
 
 	if ( !texture ) {
 		return;
@@ -1592,14 +1636,9 @@ void APIENTRY qglTexParameterf( GLenum target, GLenum pname, GLfloat param )
 		return;
 	}
 
-	// a gfx texture keeps the sampling it was made with (GFX_STATUS.md, gfx gaps): a change after
-	// that (r_textureMode at run time) reaches the images loaded after the next vid_restart
-	if ( texture->texture && !gfxGl.warnedResample ) {
-		GfxGL_CurrentSampling( texture, &sampling );
-		if ( memcmp( &sampling, &texture->made, sizeof( sampling ) ) ) {
-			gfxGl.warnedResample = qtrue;
-			ri.Printf( PRINT_WARNING, "gfx: texture filtering changes apply after a vid_restart\n" );
-		}
+	// a gfx texture made already gets the new sampling at its next draw (GfxGL_Resample)
+	if ( texture->texture ) {
+		texture->resample = qtrue;
 	}
 }
 

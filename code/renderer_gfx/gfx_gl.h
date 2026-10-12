@@ -61,7 +61,9 @@ typedef struct {
 	GLenum		magFilter;
 	float		anisotropy;
 	struct gfx_texture *texture;	// the gfx texture, made from the staged levels
-	gfxGlSampling_t made;		// the sampling it was made with
+	gfxGlSampling_t made;		// the sampling it has
+	int			levels;			// the levels it was made with
+	qboolean	resample;		// a parameter changed since: the next draw gives it the sampling
 } gfxGlTexture_t;
 
 /*

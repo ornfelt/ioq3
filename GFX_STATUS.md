@@ -142,7 +142,10 @@ gap 3) with a Linux build, phase 7 when asked.
   passed on. A new image re-creates the gfx texture; glTexSubImage2D patches the staging, or
   uploads whole rows from row `yoffset` (RE_UploadCinematic's frames; part of a row: one warning,
   ioq3-rs gap 18). A parameter change after the gfx texture exists (r_textureMode at run time)
-  cannot reach it (ioq3-rs gap 16): one warning. Where C differs: only one texture is ever staged,
+  sets its `resample` flag, and its next draw gives it the new sampling (GfxGL_Resample through
+  `gfx_set_texture_sampling`, ioq3-rs gap 16 fixed in gfx) - once per texture, where every image
+  gets two calls; a device without the op keeps the old sampling, with one warning, until the
+  next `vid_restart`. Where C differs: only one texture is ever staged,
   so the staging is one buffer in `gfxGl.staging` (grown to the largest image with ri.Malloc, kept
   until GLimp_Shutdown, also used to reduce a non-RGBA cinematic frame) instead of a Vec per
   texture.
@@ -308,8 +311,7 @@ so the rest are expected here too):
   the screen through GDI, one frame late and only what is visible; no depth, so `r_flares 1`'s
   depth test reads zeros - one warning - and flares show only within ~28 units of the eye).
 - Worked around by design since phase 3, as in ioq3-rs (not each seen failing here): gaps 4
-  (no depth bias) and 5 (no clip planes) - in the shaders; 16 (sampling fixed at texture
-  creation); 17 (no GL_SRC_ALPHA_SATURATE); 18 (`gfx_set_texture_data` takes whole rows); 19
+  (no depth bias) and 5 (no clip planes) - in the shaders; 17 (no GL_SRC_ALPHA_SATURATE); 18 (`gfx_set_texture_data` takes whole rows); 19
   (unsynchronized stream buffers: rings sized for many frames); 20 (no base vertex: indices
   rebased); 21 (no `invariant` / `precise`: one program); 22 (no push constants: a ring write and
   `gfx_bind_constant` per uniform change); 23 (GL clip depth on D3D / Vulkan: remapped in
@@ -443,6 +445,22 @@ and wc_clean_new's `lib/gfx` copy), so ioq3-rs's gfx.dll gets them too once rebu
   (and d3d11, d3d12, vk with the validation layer on win32): fullscreen frames identical to the
   win32 gl4 one, `r_fullscreen` 0 -> 1 -> 0 with `vid_restart`, `minimize`, the key. The
   timedemo tables below measured `r_fullscreen 1` on win32 / glfw before this, at 1904x993.
+- **ioq3-rs gap 16** (gfx `9226bec`): `gfx_set_texture_sampling` (and `gfx_dll_set_texture_sampling`)
+  gives a made texture new filters, wrap and anisotropy - an optional device op, on every device
+  here: gl3 / gles3 set the parameters on the bound texture, gl4 through DSA, d3d11 makes a new
+  sampler state, d3d12 updates the sampler descriptor and its hash, vk makes a new VkSampler and
+  destroys the old one after a GPU idle wait; false for a multisampled texture on gl / vk. gfx's
+  "sampler state" binds textures, it is no sampler object, so the change is on the texture.
+  gfx_gl.c's qglTexParameterf flags a made texture and GfxGL_Submit resamples the bound ones before
+  the draw, so `r_textureMode` set in a running game takes effect at once (it warned that the
+  change waits for a `vid_restart`). With it d3d11 / d3d12 sample only level 0 of a texture made
+  or set without mip filtering, as gl / vk do: with GL_NEAREST they picked the smaller mip levels
+  (10.8% of q3dm1's world region differed from gl4, now 0.1%). d3d11 tells a shadow texture by
+  its type, not by the comparison of the sampler state's GetDesc, which the runtime does not hand
+  back as made. Checked on the win32 window on gl4, gl3, gles3, d3d11, d3d12 and vk (validation
+  layer clean, no TDR): `r_textureMode GL_NEAREST` set in a running game gives the frame of a game
+  started with it (0.7% of the world region differs, against 12% before the change); the input
+  check and the vk resize / `vid_restart` run as before.
 
 ### Recommended order for the gfx fixes
 
@@ -467,8 +485,6 @@ something no caller here hits - document the difference instead.
 
 - renderer_gfx draws at the window's real (dpi-scaled) size, where renderer_opengl1 draws at the
   `r_mode` size and Windows scales its window up: the same picture, sharper.
-- `r_textureMode` changed in a running game reaches only images loaded after a `vid_restart`
-  (gap 16, one warning).
 - On release of a grabbed mouse the cursor goes back to where the grab started, not to the window
   center as on the SDL path (gfx_set_mouse_position gap above; ioq3-rs does the same).
 - `screenshot` / `screenshotJPEG` / video capture read the screen (Windows only; the frame
