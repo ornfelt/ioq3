@@ -33,11 +33,15 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #include "../renderercommon/iqm.h"
 #include "../renderercommon/qgl.h"
 
-#define GLE(ret, name, ...) extern name##proc * qgl##name;
+// renderer_gfx: the GL 1.1 calls are gfx_gl.c's functions rather than pointers into a GL driver;
+// glGetStringi stays a pointer, never set (gfx_gl.c emulates GL 1.3)
+#define GLE(ret, name, ...) name##proc qgl##name;
 QGL_1_1_PROCS;
 QGL_1_1_FIXED_FUNCTION_PROCS;
 QGL_DESKTOP_1_1_PROCS;
 QGL_DESKTOP_1_1_FIXED_FUNCTION_PROCS;
+#undef GLE
+#define GLE(ret, name, ...) extern name##proc * qgl##name;
 QGL_3_0_PROCS;
 #undef GLE
 

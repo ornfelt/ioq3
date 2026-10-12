@@ -15,5 +15,6 @@ replaces code/sdl/sdl_glimp.c and sdl_gamma.c for renderer_gfx).
 
 void GfxGLimp_Backends( enum gfx_device_backend *device, enum gfx_window_backend *window );
 void GfxGLimp_PrintBackends( void );
+qboolean GfxGLimp_ReadWindowPixels( int x, int y, int width, int height, byte *bgra );
 
 #endif

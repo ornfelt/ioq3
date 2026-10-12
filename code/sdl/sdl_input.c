@@ -33,6 +33,11 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #include "../client/client.h"
 #include "../sys/sys_local.h"
 
+#ifdef USE_GFX
+#include "gfx/window.h"
+#include "../renderer_gfx/gfx_public.h"
+#endif
+
 #if !SDL_VERSION_ATLEAST(2, 0, 17)
 #define KMOD_SCROLL KMOD_RESERVED
 #endif
@@ -60,6 +65,27 @@ static int in_eventTime = 0;
 static SDL_Window *SDL_window = NULL;
 
 #define CTRL(a) ((a)-'a'+1)
+
+#ifdef USE_GFX
+/*
+===============
+IN_GfxWindowWithoutSDL
+
+renderer_gfx's gfx window when it is not an SDL one. An SDL one shares the client's SDL2, so its
+events reach IN_ProcessEvents as the GL renderers' window does; any other has no SDL video
+behind it and is kept alive by gfx's own event pump (its input is read from gfx in
+GFX_STATUS.md phase 2). NULL while another renderer is loaded.
+===============
+*/
+static struct gfx_window *IN_GfxWindowWithoutSDL( void )
+{
+	struct gfx_window *window = GfxGLimp_GetWindow( );
+
+	if( window && gfx_window_get_window_backend( window ) != GFX_WINDOW_SDL )
+		return window;
+	return NULL;
+}
+#endif
 
 /*
 ===============
@@ -1240,6 +1266,13 @@ void IN_Frame( void )
 {
 	qboolean loading;
 
+#ifdef USE_GFX
+	struct gfx_window *gfxWindow = IN_GfxWindowWithoutSDL( );
+
+	if( gfxWindow )
+		gfx_window_poll_events( gfxWindow );
+#endif
+
 	IN_JoyMove( );
 
 	// If not DISCONNECTED (main menu) or ACTIVE (in game), we're loading
@@ -1288,7 +1321,13 @@ void IN_Init( void *windowData )
 {
 	int appState;
 
+#ifdef USE_GFX
+	// renderer_gfx hands no SDL window (windowData is NULL); on a non-SDL gfx window there is no
+	// SDL video either
+	if( !IN_GfxWindowWithoutSDL( ) && !SDL_WasInit( SDL_INIT_VIDEO ) )
+#else
 	if( !SDL_WasInit( SDL_INIT_VIDEO ) )
+#endif
 	{
 		Com_Error( ERR_FATAL, "IN_Init called before SDL_Init( SDL_INIT_VIDEO )" );
 		return;

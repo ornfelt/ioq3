@@ -40,15 +40,16 @@ set(RENDERER_GFX_SOURCES
     ${SOURCE_DIR}/renderer_gfx/tr_surface.c
     ${SOURCE_DIR}/renderer_gfx/tr_world.c
     ${SOURCE_DIR}/renderer_gfx/gfx_glimp.c
+    ${SOURCE_DIR}/renderer_gfx/gfx_gl.c
 )
 
 set(RENDERER_GFX_BINARY renderer_gfx)
 
-# sdl_glimp.c / sdl_gamma.c still make the window until gfx_glimp.c does (GFX_STATUS.md)
+# gfx_glimp.c / gfx_gl.c take the place of SDL_RENDERER_SOURCES (sdl_glimp.c / sdl_gamma.c);
+# SDL's headers stay on the include path for the GL types of qgl.h
 list(APPEND RENDERER_GFX_BINARY_SOURCES
     ${RENDERER_COMMON_SOURCES}
     ${RENDERER_GFX_SOURCES}
-    ${SDL_RENDERER_SOURCES}
     ${RENDERER_LIBRARY_SOURCES})
 
 set(RENDERER_GFX_DEFINITIONS ${RENDERER_DEFINITIONS})
