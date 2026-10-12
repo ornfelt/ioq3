@@ -40,7 +40,9 @@ $B = "$env:code_root_dir/Code2/C/ioq3/build_gfx/RelWithDebInfo"
 - `vm_* 1` runs the QVMs in the interpreter. The RelWithDebInfo client (main's too) crashes in
   JIT-compiled QVM code right after `ui.qvm` loads, whatever the renderer (GFX_STATUS.md, open
   problems).
-- `r_fullscreen` defaults to 1 (a desktop-sized window). `r_fullscreen 0 +set r_mode 4` gives a
+- `r_fullscreen` defaults to 1: borderless fullscreen on the monitor, at the desktop's mode (on
+  the win32, glfw and sdl windows). A screenshot reads the screen, so keep the game in front while
+  it is taken (a covered window captures what covers it). `r_fullscreen 0 +set r_mode 4` gives a
   window; gfx grows a small window to most of the screen, so it ends up bigger than the mode
   (`gfx sized the window to W H` in the console).
 - With `USE_GFX` the default `cl_renderer` is `gfx`. `+set cl_renderer opengl1` (or `opengl2`)

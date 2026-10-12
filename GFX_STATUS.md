@@ -11,11 +11,13 @@ This file is the current snapshot; the history is in git.
 The x11 window is Linux only and not built or run here (no Linux machine, no WSL). Phase 7
 (renderergl2 features) is only done when asked. Merging `gfx` into `main` is the user's decision.
 
-**Last run:** ioq3-rs gap 24 fixed in gfx ("Fixed in gfx"): d3d11 appends to stream buffers
-instead of discarding them per write, so gfx_draw.c's d3d11 one-draw buffers are gone and d3d11
-uses the rings; Release timedemo on d3d11 708 -> 856 fps (Performance), frames compared with gl4
-as before. Before it: gaps 12-14 and an A/B timedemo of the day's gfx fixes (no change), gaps 26,
-25, the win32 client size, 28, 9, 27 and steps 1-3 of the recommended gfx fixes.
+**Last run:** ioq3-rs gaps 1 (most of it) and 11 fixed in gfx ("Fixed in gfx"): `r_fullscreen`
+is borderless fullscreen on the monitor (win32, glfw, sdl), `minimize` works, and the sdl window
+gives the key left of 1 on a Nordic layout as the console key. gfx_glimp.c sets the mode after
+creating the window and minimizes through gfx. Checked on the three windows and on d3d11, d3d12
+and vk (validation layer clean, no TDR); screen-captured screenshots kept only from runs where the
+game held the foreground throughout. Before it: gap 24 (d3d11 rings), gaps 12-14, the day's A/B
+timedemo, gaps 26, 25, the win32 client size, 28, 9, 27 and steps 1-3.
 
 **Next:** nothing in phases 0-6. Possible follow-ups, none required: the x11 window and the
 Linux build on a Linux machine (`cmake/gfx.cmake`'s Linux branch follows gfx's CMakeLists.txt;
@@ -184,10 +186,13 @@ gap 3) with a Linux build, phase 7 when asked.
   sample count), titled `CLIENT_WINDOW_TITLE`; `r_mode` as in the GL renderers, then the window's
   real size: gfx makes its windows dpi aware and grows a small one to most of the work area, so
   glConfig takes the size gfx gave (`gfx sized the window to W H`, gfx's client area on every
-  window). `r_fullscreen` and `r_mode -2` make a desktop-sized window (desktop size from
-  GetSystemMetrics on Windows, 640x480 elsewhere for now; the win32 / glfw windows cut it down to
-  the work area less their frame, 1904x993 here, the sdl window covers the screen); toggling `r_fullscreen` runs
-  `vid_restart`; `r_swapInterval` applied at creation; `minimize` prints that gfx cannot. A D3D
+  window). `r_fullscreen` makes a desktop-sized window and turns it borderless fullscreen on its
+  monitor (`gfx_window_set_mode`, the desktop's mode, no display mode change; 1920x1080 here on the
+  win32, glfw and sdl windows; a window backend without it keeps the desktop-sized window).
+  `r_mode -2` windowed is a desktop-sized window (desktop size from GetSystemMetrics on Windows,
+  640x480 elsewhere for now; the win32 / glfw windows cut it down to the work area less their
+  frame, 1904x993 here); toggling `r_fullscreen` runs `vid_restart`; `r_swapInterval` applied at
+  creation; `minimize` minimizes the window (`gfx_window_minimize`). A D3D
   `r_gfxDevice` with another `r_gfxWindow` uses the win32 window (console message), as gfx makes
   D3D devices only there. A failed window falls back to the default backends (gl4 / sdl), then
   to `r_mode 3`. gfx's error reports go to the console as warnings (`gfx_error_callback`).
@@ -294,17 +299,14 @@ included. The x11 window and the Linux build are untested here (no Linux machine
 Met here so far, each also in ioq3-rs's list (its `GFX_STATUS.md`, gaps 1-28, which are gfx's,
 so the rest are expected here too):
 
-- ioq3-rs gap 1: no fullscreen, display mode list, desktop size, window position or minimize
-  (workaround: a desktop-sized window, the size from GetSystemMetrics on Windows only).
+- ioq3-rs gap 1, what is left of it: no display mode list (exclusive fullscreen at another
+  resolution), desktop size query or window position - fullscreen is borderless at the desktop's
+  mode, and `r_mode -2` windowed still takes the desktop size from GetSystemMetrics (Windows) or
+  640x480.
 - ioq3-rs gap 2: no gamma ramp (workaround: overbright as end-of-frame blend passes).
 - ioq3-rs gap 3: no read back of the color or depth buffer (workaround on Windows: the color from
   the screen through GDI, one frame late and only what is visible; no depth, so `r_flares 1`'s
   depth test reads zeros - one warning - and flares show only within ~28 units of the eye).
-- ioq3-rs gap 11: the sdl window maps keys by SDL keycode (layout) without a scancode: on this
-  Swedish layout the key left of 1 (`§`) arrives as GFX_KEY_UNKNOWN there, where win32 / glfw
-  map it by position to GFX_KEY_GRAVE (the console key). The SDL path makes it K_WORLD_53, which
-  is no console key either, so the console does not open from it on the SDL path or the sdl gfx
-  window alike (bind a key to `toggleconsole`, or Shift+Esc).
 - Worked around by design since phase 3, as in ioq3-rs (not each seen failing here): gaps 4
   (no depth bias) and 5 (no clip planes) - in the shaders; 16 (sampling fixed at texture
   creation); 17 (no GL_SRC_ALPHA_SATURATE); 18 (`gfx_set_texture_data` takes whole rows); 19
@@ -428,6 +430,19 @@ and wc_clean_new's `lib/gfx` copy), so ioq3-rs's gfx.dll gets them too once rebu
   the other devices. Release timedemo 708 -> 856 fps; q3dm1 / the mirror / the portal camera match
   gl4 as closely as before (the portal view's spread is animation timing: a device against itself
   differs as much).
+- **ioq3-rs gaps 1 (most of it) and 11** (gfx `ec9c846`): `gfx_window_set_mode` (windowed /
+  borderless fullscreen on the window's monitor at the desktop's mode, ported from gfx_benilla)
+  and `gfx_window_minimize` on the win32, glfw and sdl windows (a no-op on the others, x11 among
+  them for now). GfxGLimp_SetMode turns an `r_fullscreen` window borderless fullscreen - the
+  monitor's 1920x1080, where it was a 1904x993 framed window inside the work area - and
+  GLimp_Minimize minimizes; `vid_restart` toggles between the two. Display modes, a desktop size
+  query and window position are still missing (gfx gaps). The sdl window maps a keysym gfx has no
+  name for by the key's position (gfx_benilla's scancode table): the key left of 1 on this
+  Swedish layout is GFX_KEY_GRAVE, the console key, as on the win32 / glfw windows, where it was
+  GFX_KEY_UNKNOWN; letters stay by layout there, as on the SDL path. Checked on the three windows
+  (and d3d11, d3d12, vk with the validation layer on win32): fullscreen frames identical to the
+  win32 gl4 one, `r_fullscreen` 0 -> 1 -> 0 with `vid_restart`, `minimize`, the key. The
+  timedemo tables below measured `r_fullscreen 1` on win32 / glfw before this, at 1904x993.
 
 ### Recommended order for the gfx fixes
 

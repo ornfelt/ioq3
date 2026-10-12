@@ -299,8 +299,9 @@ qboolean GfxGLimp_ReadWindowPixels( int x, int y, int width, int height, byte *b
 ===============
 GfxGLimp_SetMode
 
-GLimp_SetMode on gfx: the window and device for mode and the given backends. gfx has no
-fullscreen: r_fullscreen makes a desktop-sized window.
+GLimp_SetMode on gfx: the window and device for mode and the given backends. r_fullscreen makes
+a desktop-sized window and turns it borderless fullscreen on its monitor, at the desktop's mode
+(gfx changes no display mode); a window backend without that keeps the desktop-sized window.
 ===============
 */
 static qboolean GfxGLimp_SetMode( int mode, qboolean fullscreen, enum gfx_device_backend deviceBackend, enum gfx_window_backend windowBackend )
@@ -353,6 +354,10 @@ static qboolean GfxGLimp_SetMode( int mode, qboolean fullscreen, enum gfx_device
 		ri.Printf( PRINT_ALL, "Couldn't create the gfx window (device %s, window %s)\n",
 			gfx_device_backend_name( deviceBackend ), gfx_window_backend_name( windowBackend ) );
 		return qfalse;
+	}
+
+	if ( fullscreen ) {
+		gfx_window_set_mode( window, GFX_WINDOW_MODE_BORDERLESS_FULLSCREEN );
 	}
 
 	// gfx makes its windows dpi aware and grows a small one (keeping its shape) to most of the
@@ -650,8 +655,9 @@ Minimize the game so that user is back at the desktop
 */
 void GLimp_Minimize( void )
 {
-	// gfx has no minimize; hiding the window would lose it
-	ri.Printf( PRINT_ALL, "minimize: not supported on gfx windows\n" );
+	if ( gfxGl.window ) {
+		gfx_window_minimize( gfxGl.window );
+	}
 }
 
 /*
