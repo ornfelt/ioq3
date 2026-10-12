@@ -11,18 +11,20 @@ This file is the current snapshot; the history is in git.
 The x11 window is Linux only and not built or run here (no Linux machine, no WSL). Phase 7
 (renderergl2 features) is only done when asked. Merging `gfx` into `main` is the user's decision.
 
-**Last run:** ioq3-rs gaps 1 (most of it) and 11 fixed in gfx ("Fixed in gfx"): `r_fullscreen`
-is borderless fullscreen on the monitor (win32, glfw, sdl), `minimize` works, and the sdl window
-gives the key left of 1 on a Nordic layout as the console key. gfx_glimp.c sets the mode after
-creating the window and minimizes through gfx. Checked on the three windows and on d3d11, d3d12
-and vk (validation layer clean, no TDR); screen-captured screenshots kept only from runs where the
-game held the foreground throughout. Before it: gap 24 (d3d11 rings), gaps 12-14, the day's A/B
-timedemo, gaps 26, 25, the win32 client size, 28, 9, 27 and steps 1-3.
+**Last run:** ioq3-rs gaps 2 and 10 fixed in gfx ("Fixed in gfx"): GLimp_SetGamma gives the
+window's monitor the gamma ramp (win32, glfw, sdl; applied while the window has the focus, as
+SDL does), so `r_gamma` takes effect at once and fullscreen's overbright is in the ramp; qglClear
+clears the depth or the stencil alone where only one is asked for. Checked on every window
+definition and on gl4, gl3, gles3, d3d11, d3d12 and vk (validation layer clean, no TDR), the
+monitors' ramps saved first and checked unchanged after every run; a Release A/B timedemo.
+Found on the way: gaps 29 (minimize errors on d3d11 / vk) and 30 (d3d12 fullscreen at ~240 fps).
+Before it: gap 16 (`r_textureMode` at run time), gaps 1 (most) and 11, gap 24, gaps 12-14, the
+day's A/B timedemo, gaps 26, 25, the win32 client size, 28, 9, 27 and steps 1-3.
 
 **Next:** nothing in phases 0-6. Possible follow-ups, none required: the x11 window and the
 Linux build on a Linux machine (`cmake/gfx.cmake`'s Linux branch follows gfx's CMakeLists.txt;
-gfx's x11 window has the focus helper but no minimize events yet), gfx fix step 4 (read back,
-gap 3) with a Linux build, phase 7 when asked.
+gfx's x11 window has the focus helper but no minimize events or gamma ramp yet), gfx fix
+step 4 (read back, gap 3) with a Linux build, gaps 29 and 30 (gfx gaps), phase 7 when asked.
 
 ## Phases
 
@@ -200,7 +202,14 @@ gap 3) with a Linux build, phase 7 when asked.
   D3D devices only there. A failed window falls back to the default backends (gl4 / sdl), then
   to `r_mode 3`. gfx's error reports go to the console as warnings (`gfx_error_callback`).
   sdl_glimp's cvars (`r_allowResize`, `r_centerWindow`, ...) stay registered, unused.
-- **Gamma** (ioq3-rs gap 2): gfx has no gamma ramp. `deviceSupportsGamma` only with `r_gamma 1`
+- **Gamma** (ioq3-rs gap 2, fixed in gfx): GLimp_SetGamma gives the ramp R_SetColorMappings makes
+  to the window's monitor (`gfx_window_set_gamma_ramp`), as sdl_gamma.c gives it to SDL: 16 bits
+  per entry, Windows' clamp, never decreasing. gfx applies it while the window has the focus and
+  puts the monitor's own ramp back on a focus loss and when the window is deleted, as SDL does.
+  With `r_ignorehwgamma 0` that is `deviceSupportsGamma` on every window with a ramp (win32,
+  glfw, sdl): `r_gamma` takes effect at once, and fullscreen's overbright bits are in the ramp,
+  as with renderer_opengl1. Without a ramp (the x11 window, or a ramp the system refuses: a
+  developer note) the workaround from before stays: `deviceSupportsGamma` only with `r_gamma 1`
   and `r_ignorehwgamma 0`; GLimp_SetGamma keeps the ramp's overbright shift
   (`gfxGl.overbrightPasses`; any other ramp: a note that `r_gamma` needs `vid_restart`, and
   `tr.overbrightBits`). GLimp_EndFrame applies it before the swap (`GfxGL_Overbright`, as
@@ -253,9 +262,10 @@ gap 3) with a Linux build, phase 7 when asked.
   area from the screen (GDI BitBlt + GetDIBits of this thread's `ioquake3` window, bottom-up rows
   as GL gives them): the frame presented last, and a covered window shows what covers it. Depth
   reads (flares) and other platforms get zeros (one warning). The callers apply the gamma ramp
-  themselves (`R_GammaCorrect`), and the screen has the overbright passes in it where a GL back
-  buffer has not, so glReadPixels shifts them out again (`v >> n`, as ioq3-rs): fullscreen
-  screenshots and video frames match renderer_opengl1's.
+  themselves (`R_GammaCorrect`). A monitor ramp is applied at scan-out, so the screen read has
+  none of it, as a GL back buffer; only the overbright passes of a window without a ramp are in
+  the screen, and glReadPixels shifts them out again (`v >> n`, as ioq3-rs): fullscreen
+  screenshots and video frames match renderer_opengl1's either way.
 - **Shaders.** `code/renderer_gfx/shaders/` is ioq3-rs's `shaders/` unchanged: `generic.vs.gfxs` /
   `generic.fs.gfxs` and the compiled `shaders/` (gl3, gl4, gles3), `shaders_d3/` (d3d11; d3d12
   loads it), `shaders_gles3_dark/` (compiled from a folder named so: gfx's compiler adds its
@@ -299,17 +309,28 @@ included. The x11 window and the Linux build are untested here (no Linux machine
 
 ## gfx gaps (for the gfx maintainer)
 
-Met here so far, each also in ioq3-rs's list (its `GFX_STATUS.md`, gaps 1-28, which are gfx's,
+Met here so far, each also in ioq3-rs's list (its `GFX_STATUS.md`, gaps 1-30, which are gfx's,
 so the rest are expected here too):
 
 - ioq3-rs gap 1, what is left of it: no display mode list (exclusive fullscreen at another
   resolution), desktop size query or window position - fullscreen is borderless at the desktop's
   mode, and `r_mode -2` windowed still takes the desktop size from GetSystemMetrics (Windows) or
   640x480.
-- ioq3-rs gap 2: no gamma ramp (workaround: overbright as end-of-frame blend passes).
+- ioq3-rs gap 2, fixed in gfx (`4c3fdc8`) on the win32, glfw and sdl windows: the x11 window still
+  has no gamma ramp (there: overbright as end-of-frame blend passes, the `r_gamma` curve in the
+  textures).
 - ioq3-rs gap 3: no read back of the color or depth buffer (workaround on Windows: the color from
   the screen through GDI, one frame late and only what is visible; no depth, so `r_flares 1`'s
   depth test reads zeros - one warning - and flares show only within ~28 units of the eye).
+- ioq3-rs gap 29 (found here): a minimize logs `gfx: failed to create default depth stencil
+  texture: E_INVALIDARG` on d3d11 and `gfx: failed to create depth image:
+  VK_ERROR_INITIALIZATION_FAILED` on vk - the window's 0x0 size reaches the device's resize, which
+  makes a depth buffer of it. Harmless here (the next restore resizes again), seen with gfx
+  `9226bec` as well; gl and d3d12 log nothing.
+- ioq3-rs gap 30 (found here): d3d12 in borderless fullscreen runs at about 240 fps (timedemo
+  `four`, 1920x1080, 200 Hz monitor) where it runs at about 905 in a 1255x941 window and d3d11 /
+  gl4 / vk at 850 - 950 in the same fullscreen: likely the swapchain going to independent flip
+  without tearing allowed. Seen in every variant of the gaps 2 / 10 A/B, so older than them.
 - Worked around by design since phase 3, as in ioq3-rs (not each seen failing here): gaps 4
   (no depth bias) and 5 (no clip planes) - in the shaders; 17 (no GL_SRC_ALPHA_SATURATE); 18 (`gfx_set_texture_data` takes whole rows); 19
   (unsynchronized stream buffers: rings sized for many frames); 20 (no base vertex: indices
@@ -445,6 +466,27 @@ and wc_clean_new's `lib/gfx` copy), so ioq3-rs's gfx.dll gets them too once rebu
   (and d3d11, d3d12, vk with the validation layer on win32): fullscreen frames identical to the
   win32 gl4 one, `r_fullscreen` 0 -> 1 -> 0 with `vid_restart`, `minimize`, the key. The
   timedemo tables below measured `r_fullscreen 1` on win32 / glfw before this, at 1904x993.
+- **ioq3-rs gaps 2 and 10** (gfx `4c3fdc8`): `gfx_window_get_gamma_ramp` / `gfx_window_set_gamma_ramp`
+  give the window's monitor a gamma ramp on the win32, glfw and sdl windows (win32 through the
+  monitor's own DC: the screen's DC refuses `GetDeviceGammaRamp` with this machine's two
+  monitors), applied while the window has the focus and taken back on a focus loss and at
+  deletion; GLimp_SetGamma sets it (Decisions, "Gamma"), so `r_gamma` takes effect at once and
+  fullscreen's overbright bits are in the ramp instead of end-of-frame passes. `gfx_clear_depth` /
+  `gfx_clear_stencil` clear one of them; qglClear uses them for a GL_DEPTH_BUFFER_BIT or
+  GL_STENCIL_BUFFER_BIT alone (renderergl1 clears the depth alone every frame, the stencil with it
+  only for `r_shadows 2`). Checked: the ramp sampled from outside while the game runs on every
+  window definition (gl4 / d3d11 / vk on win32, gl4 / vk on glfw and sdl) - `r_gamma 1.5` gives
+  red[64] 25957 on the game's monitor only, `set r_gamma 1.2` 20817 at once, `minimize` and the
+  exit the identity ramp back; `r_ignorehwgamma 1` leaves the ramp alone; fullscreen puts the
+  overbright ramp (red[128] 65535) and its screenshot matches the passes' (mean difference 3, the
+  passes' read back lost the low bit). The clears with a temporary end-of-frame check in four
+  strips (stencil 1 then a depth-only clear, then red where the stencil is 1; the same with a
+  combined clear; depth 0 then a stencil-only clear, then green with depth LESS; the same with a
+  combined clear): red and green exactly where they belong on gl4, gl3, gles3, d3d11, d3d12 and
+  vk (validation layer clean), with the clears scissored (d3d11's draw path) and over the whole
+  window (its ClearDepthStencilView). Release timedemo A/B in one build (fullscreen, 2 runs;
+  d3d11 4): gl4 918 -> 944, gl3 914 -> 924, gles3 933 -> 945, vk 933 -> 934, d3d11 859 -> 847
+  (-1.3%, runs overlapping: 848 - 867 against 834 - 858), d3d12 240 -> 240 (gap 30).
 - **ioq3-rs gap 16** (gfx `9226bec`): `gfx_set_texture_sampling` (and `gfx_dll_set_texture_sampling`)
   gives a made texture new filters, wrap and anisotropy - an optional device op, on every device
   here: gl3 / gles3 set the parameters on the bound texture, gl4 through DSA, d3d11 makes a new

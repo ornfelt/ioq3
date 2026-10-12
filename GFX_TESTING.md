@@ -85,8 +85,9 @@ $p.WaitForExit(90000)
 - The same script with `+set cl_renderer opengl1` gives renderer_opengl1's frames to compare. It
   draws at the `r_mode` size (800x600) where renderer_gfx draws at the window's real size, so
   scale one to the other before comparing.
-- `r_ignorehwgamma 1` makes renderer_opengl1 use the same light scale as renderer_gfx in a
-  window; with its hardware gamma ramp it halves the lightmaps and its capture misses the ramp.
+- Give both renderers the same `r_ignorehwgamma`: renderer_gfx takes the monitor's hardware
+  gamma ramp too since ioq3-rs gap 2 was fixed (win32, glfw and sdl windows), and with the ramp a
+  capture misses it on both. `r_ignorehwgamma 1` still gives both the same light scale.
 - Screenshots are read from the screen (gfx has no read back): keep the window uncovered while
   the script runs, or the capture shows what covers it.
 - `+togglemenu` opens the main menu (a fresh home starts on the CD key menu), `+cinematic

@@ -37,6 +37,8 @@ cvar_t *r_centerWindow;
 cvar_t *r_sdlDriver;
 cvar_t *r_preferOpenGLES;
 
+static qboolean GfxGLimp_HasGammaRamp( void );
+
 /*
 ===============
 GfxGLimp_Error
@@ -574,10 +576,12 @@ success:
 	glConfig.driverType = GLDRV_ICD;
 	glConfig.hardwareType = GLHW_GENERIC;
 
-	// gfx has no gamma ramp. A ramp that only shifts by the overbright bits (r_gamma 1) is drawn
-	// at the end of the frame (GLimp_SetGamma); with another r_gamma the renderer brightens the
-	// textures instead, as on a GL driver without the ramp
-	glConfig.deviceSupportsGamma = !r_ignorehwgamma->integer && r_gamma->value == 1.0f;
+	// The gamma ramp of the window's monitor, as SDL gives renderer_opengl1 its window's
+	// (GLimp_SetGamma). Without one (the x11 window) a ramp that only shifts by the overbright
+	// bits (r_gamma 1) is drawn at the end of the frame; with another r_gamma the renderer
+	// brightens the textures instead, as on a GL driver without the ramp
+	gfxGl.gammaRamp = !r_ignorehwgamma->integer && GfxGLimp_HasGammaRamp();
+	glConfig.deviceSupportsGamma = gfxGl.gammaRamp || ( !r_ignorehwgamma->integer && r_gamma->value == 1.0f );
 
 	GfxGLimp_ConfigStrings( gfx_window_get_device_backend( gfxGl.window ), gfx_window_get_window_backend( gfxGl.window ) );
 
@@ -699,13 +703,73 @@ static int GfxGLimp_RampShift( unsigned char *ramps[3] )
 }
 
 /*
+===============
+GfxGLimp_HasGammaRamp
+
+Whether the gfx window can give its monitor a gamma ramp (the win32, glfw and sdl windows)
+===============
+*/
+static qboolean GfxGLimp_HasGammaRamp( void )
+{
+	uint16_t ramp[3][GFX_GAMMA_RAMP_SIZE];
+
+	return gfx_window_get_gamma_ramp( gfxGl.window, ramp[0], ramp[1], ramp[2] ) ? qtrue : qfalse;
+}
+
+/*
+===============
+GfxGLimp_SetGammaRamp
+
+The ramp on the window's monitor, as sdl_gamma.c gives it to SDL: 16 bits per entry, within
+what Windows takes, never decreasing
+===============
+*/
+static qboolean GfxGLimp_SetGammaRamp( unsigned char *ramps[3] )
+{
+	uint16_t table[3][GFX_GAMMA_RAMP_SIZE];
+	int i, j;
+
+	for ( j = 0; j < 3; j++ ) {
+		for ( i = 0; i < GFX_GAMMA_RAMP_SIZE; i++ ) {
+			table[j][i] = ( (uint16_t)ramps[j][i] << 8 ) | ramps[j][i];
+		}
+	}
+
+#ifdef _WIN32
+	// Windows puts this odd restriction on gamma ramps...
+	for ( j = 0; j < 3; j++ ) {
+		for ( i = 0; i < 128; i++ ) {
+			if ( table[j][i] > ( ( 128 + i ) << 8 ) ) {
+				table[j][i] = ( 128 + i ) << 8;
+			}
+		}
+		if ( table[j][127] > 254 << 8 ) {
+			table[j][127] = 254 << 8;
+		}
+	}
+#endif
+
+	// enforce constantly increasing
+	for ( j = 0; j < 3; j++ ) {
+		for ( i = 1; i < GFX_GAMMA_RAMP_SIZE; i++ ) {
+			if ( table[j][i] < table[j][i - 1] ) {
+				table[j][i] = table[j][i - 1];
+			}
+		}
+	}
+
+	return gfx_window_set_gamma_ramp( gfxGl.window, table[0], table[1], table[2] ) ? qtrue : qfalse;
+}
+
+/*
 =================
 GLimp_SetGamma
 
-gfx has no gamma ramp: GLimp_EndFrame doubles the frame once per overbright bit
-(GfxGL_Overbright), which is the ramp R_SetColorMappings makes with r_gamma 1. A ramp with a gamma curve
-(r_gamma changed since GLimp_Init) keeps only its overbright shift until the next vid_restart,
-which moves the gamma into the textures.
+The ramp goes to the window's monitor (GfxGLimp_SetGammaRamp), where the window has one. Else,
+or where the system refuses it, GLimp_EndFrame doubles the frame once per overbright bit
+(GfxGL_Overbright), which is the ramp R_SetColorMappings makes with r_gamma 1; a ramp with a
+gamma curve then keeps only its overbright shift until the next vid_restart, which moves the
+gamma into the textures (without a monitor ramp).
 =================
 */
 void GLimp_SetGamma( unsigned char red[256], unsigned char green[256], unsigned char blue[256] )
@@ -716,6 +780,14 @@ void GLimp_SetGamma( unsigned char red[256], unsigned char green[256], unsigned 
 	ramps[0] = red;
 	ramps[1] = green;
 	ramps[2] = blue;
+	if ( gfxGl.gammaRamp ) {
+		if ( GfxGLimp_SetGammaRamp( ramps ) ) {
+			gfxGl.overbrightPasses = 0;
+			return;
+		}
+		ri.Printf( PRINT_DEVELOPER, "gfx: the monitor refused the gamma ramp\n" );
+	}
+
 	shift = GfxGLimp_RampShift( ramps );
 	if ( shift < 0 ) {
 		ri.Printf( PRINT_ALL, "gfx: r_gamma takes effect after vid_restart (no gamma ramp)\n" );

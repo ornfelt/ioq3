@@ -1318,6 +1318,16 @@ void APIENTRY qglClear( GLbitfield mask )
 		color.a = gfxGl.clearColor[3];
 		gfx_clear_color( gfxGl.device, NULL, 0, &color );
 	}
+	// the depth or the stencil alone where only one is asked for; a device that clears them only
+	// together clears both
+	if ( ( mask & GL_DEPTH_BUFFER_BIT ) && !( mask & GL_STENCIL_BUFFER_BIT )
+		&& gfx_clear_depth( gfxGl.device, NULL, gfxGl.clearDepth ) ) {
+		return;
+	}
+	if ( ( mask & GL_STENCIL_BUFFER_BIT ) && !( mask & GL_DEPTH_BUFFER_BIT )
+		&& gfx_clear_stencil( gfxGl.device, NULL, gfxGl.clearStencil ) ) {
+		return;
+	}
 	if ( mask & ( GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT ) ) {
 		gfx_clear_depth_stencil( gfxGl.device, NULL, gfxGl.clearDepth, gfxGl.clearStencil );
 	}

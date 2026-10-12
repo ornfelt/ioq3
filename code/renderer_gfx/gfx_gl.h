@@ -156,6 +156,7 @@ typedef struct {
 	vec2_t		currentSt[GFX_GL_TEXTURE_UNITS];
 
 	int			overbrightPasses;	// GLimp_SetGamma's overbright shift (GfxGL_Overbright)
+	qboolean	gammaRamp;			// GLimp_SetGamma sets the gamma ramp of the window's monitor
 
 	qboolean	warnedImmediate;
 	qboolean	warnedReadPixels;
