@@ -28,12 +28,6 @@ Nothing here allocates once GLimp_Init is done; the tables are fixed arrays.
 #define GFX_DRAW_INDEX_RING_SIZE		( 8 << 20 )
 // uniform ring: tens of thousands of draws at the usual 256-byte uniform alignment
 #define GFX_DRAW_UNIFORM_RING_SIZE		( 8 << 20 )
-// the buffers of a device whose stream writes discard the whole buffer (d3d11, see
-// gfxDrawRing_t): one draw at a time, so only the largest draw has to fit - a tess batch is at most
-// SHADER_MAX_VERTEXES / SHADER_MAX_INDEXES, glBegin's immediate vertices a few thousand
-#define GFX_DRAW_DISCARD_VERTEX_SIZE	( 512 << 10 )
-#define GFX_DRAW_DISCARD_INDEX_SIZE		( 256 << 10 )
-#define GFX_DRAW_DISCARD_UNIFORM_SIZE	( 4 << 10 )
 
 // the smallest uniform-offset alignment any gfx device asks for is at most this
 #define GFX_DRAW_MIN_UNIFORM_STRIDE		256
@@ -48,17 +42,14 @@ Nothing here allocates once GLimp_Init is done; the tables are fixed arrays.
 #define GFX_DRAW_FRAGMENT_SHADER		"generic"
 
 /*
-A ring of one gfx stream buffer. gfx's d3d11 device maps a stream buffer with
-D3D11_MAP_WRITE_DISCARD on every write: the driver hands out a fresh copy of the whole buffer each
-time (the draws already recorded keep theirs), so a big ring is a big copy per draw. With discard
-set every write goes to offset 0 of a buffer sized for one draw - D3D11's discard-per-draw pattern
-(GFX_STATUS.md, gfx gaps).
+A ring of one gfx stream buffer, written without a sync on every device (gfx's d3d11 device
+appends with D3D11_MAP_WRITE_NO_OVERWRITE and renames the buffer when a write starts it over at
+offset 0).
 */
 typedef struct {
 	struct gfx_buffer	*buffer;
 	uint32_t			size;
 	uint32_t			offset;
-	qboolean			discard;
 } gfxDrawRing_t;
 
 typedef struct {
@@ -130,7 +121,7 @@ Rings
 ==============================================================================
 */
 
-static qboolean GfxDraw_CreateRing( gfxDrawRing_t *ring, enum gfx_buffer_type type, uint32_t size, qboolean discard )
+static qboolean GfxDraw_CreateRing( gfxDrawRing_t *ring, enum gfx_buffer_type type, uint32_t size )
 {
 	struct gfx_buffer_create_info info;
 
@@ -144,7 +135,6 @@ static qboolean GfxDraw_CreateRing( gfxDrawRing_t *ring, enum gfx_buffer_type ty
 		return qfalse;
 	}
 	ring->size = size;
-	ring->discard = discard;
 	return qtrue;
 }
 
@@ -172,7 +162,7 @@ static qboolean GfxDraw_Push( gfxDrawRing_t *ring, const void *data, uint32_t si
 		return qfalse;
 	}
 	offset = ( ring->offset + align - 1 ) / align * align;
-	if ( ring->discard || offset > ring->size - size ) {
+	if ( offset > ring->size - size ) {
 		offset = 0;
 	}
 	gfx_set_buffer_data( gfxDraw.device, ring->buffer, data, size, offset );
@@ -281,17 +271,12 @@ what failed, and nothing is left made.
 qboolean GfxDraw_Init( struct gfx_device *device, enum gfx_device_backend deviceBackend,
 	enum gfx_window_backend windowBackend, char *error, int errorSize )
 {
-	qboolean discard = deviceBackend == GFX_DEVICE_D3D11;
-
 	Com_Memset( &gfxDraw, 0, sizeof( gfxDraw ) );
 	gfxDraw.device = device;
 
-	if ( !GfxDraw_CreateRing( &gfxDraw.vertices, GFX_BUFFER_VERTEXES,
-			discard ? GFX_DRAW_DISCARD_VERTEX_SIZE : GFX_DRAW_VERTEX_RING_SIZE, discard )
-		|| !GfxDraw_CreateRing( &gfxDraw.indices, GFX_BUFFER_INDICES,
-			discard ? GFX_DRAW_DISCARD_INDEX_SIZE : GFX_DRAW_INDEX_RING_SIZE, discard )
-		|| !GfxDraw_CreateRing( &gfxDraw.uniforms, GFX_BUFFER_UNIFORM,
-			discard ? GFX_DRAW_DISCARD_UNIFORM_SIZE : GFX_DRAW_UNIFORM_RING_SIZE, discard )
+	if ( !GfxDraw_CreateRing( &gfxDraw.vertices, GFX_BUFFER_VERTEXES, GFX_DRAW_VERTEX_RING_SIZE )
+		|| !GfxDraw_CreateRing( &gfxDraw.indices, GFX_BUFFER_INDICES, GFX_DRAW_INDEX_RING_SIZE )
+		|| !GfxDraw_CreateRing( &gfxDraw.uniforms, GFX_BUFFER_UNIFORM, GFX_DRAW_UNIFORM_RING_SIZE )
 		|| !GfxDraw_CreateWhite() ) {
 		Com_sprintf( error, errorSize, "cannot create the ring buffers" );
 		GfxDraw_Shutdown();

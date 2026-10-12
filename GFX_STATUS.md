@@ -11,17 +11,11 @@ This file is the current snapshot; the history is in git.
 The x11 window is Linux only and not built or run here (no Linux machine, no WSL). Phase 7
 (renderergl2 features) is only done when asked. Merging `gfx` into `main` is the user's decision.
 
-**Last run:** ioq3-rs gaps 12-14 fixed in gfx ("Fixed in gfx"): a focus query, minimize /
-restore events and key ups on focus loss; gfx_input.c's three workarounds are gone (the
-foreground-process check, the key bookkeeping that released keys and turned a repeat into a press,
-com_minimized from a 0x0 resize). build_gfx and build_nogfx rebuilt; checked with a test program
-on gfx (win32, glfw, sdl: a key held while the focus goes to another window gets its KEY_UP before
-FOCUS_OUT, `gfx_window_has_focus` follows, the next press is a KEY_DOWN, MINIMIZE / RESTORE) and in
-the game on the three windows (a held key's up reaches the client at a minimize, `com_minimized`
-1 while minimized and 0 after the restore, the input check). Before it: an A/B timedemo of today's
-gfx and ioq3 against those before the first fix, every device and window - no change beyond the
-run-to-run spread (Performance). Before that: gaps 26, 25, the win32 client size, 28, 9, 27 and
-steps 1-3 of the recommended gfx fixes.
+**Last run:** ioq3-rs gap 24 fixed in gfx ("Fixed in gfx"): d3d11 appends to stream buffers
+instead of discarding them per write, so gfx_draw.c's d3d11 one-draw buffers are gone and d3d11
+uses the rings; Release timedemo on d3d11 708 -> 856 fps (Performance), frames compared with gl4
+as before. Before it: gaps 12-14 and an A/B timedemo of the day's gfx fixes (no change), gaps 26,
+25, the win32 client size, 28, 9, 27 and steps 1-3 of the recommended gfx fixes.
 
 **Next:** nothing in phases 0-6. Possible follow-ups, none required: the x11 window and the
 Linux build on a Linux machine (`cmake/gfx.cmake`'s Linux branch follows gfx's CMakeLists.txt;
@@ -161,8 +155,8 @@ gap 3) with a Linux build, phase 7 when asked.
   current glColor / glTexCoord - and rebases the indices; glBegin / glEnd turns strips, fans,
   polygons and quads into indexed triangle lists and line strips into line lists; glArrayElement
   feeds the immediate vertices. Vertices, u32 indices and uniforms go into three gfx stream
-  buffers made once (16 / 8 / 8 MB rings wrapping when full, ioq3-rs gap 19; on d3d11 one-draw
-  buffers written at offset 0, gap 24); identical consecutive uniforms are written once; indices
+  buffers made once (16 / 8 / 8 MB rings wrapping when full, ioq3-rs gap 19; on every device,
+  d3d11 included since gap 24 was fixed in gfx); identical consecutive uniforms are written once; indices
   carry the base vertex (gap 20). Pipelines are found by a 24-byte `gfxPipelineKey_t` (primitive,
   blend factors or off, color mask, depth test / write / func, stencil func / ref / masks / ops or
   off, cull, fill mode, scissor - gfx's enum values as bytes, no padding) in a 2048-slot
@@ -317,7 +311,7 @@ so the rest are expected here too):
   (unsynchronized stream buffers: rings sized for many frames); 20 (no base vertex: indices
   rebased); 21 (no `invariant` / `precise`: one program); 22 (no push constants: a ring write and
   `gfx_bind_constant` per uniform change); 23 (GL clip depth on D3D / Vulkan: remapped in
-  generic.vs); 24 (d3d11's WRITE_DISCARD per write: one-draw buffers).
+  generic.vs).
 
 New here (ioq3-rs has the same behaviour, unrecorded):
 
@@ -424,6 +418,16 @@ and wc_clean_new's `lib/gfx` copy), so ioq3-rs's gfx.dll gets them too once rebu
   `keysDown`, and the 0x0 resize no longer sets `com_minimized`. Note: glfw's own focus flag (its
   starting value) means active in its thread, so a glfw window started behind another program
   reports the focus where win32 / sdl do not.
+- **ioq3-rs gap 24** (gfx `32c0bfd`): d3d11 writes a `GFX_BUFFER_STREAM` buffer as a ring -
+  appended to with D3D11_MAP_WRITE_NO_OVERWRITE, renamed with D3D11_MAP_WRITE_DISCARD only when a
+  write starts it over at offset 0, the unsynchronized stream contract of the other devices -
+  where every write discarded the whole buffer (a fresh copy per draw, the bytes outside the write
+  undefined). A constant buffer is appended to only where `MapNoOverwriteOnDynamicConstantBuffer`
+  allows (asked at device creation; Windows 8+ drivers have it); DYNAMIC buffers keep DISCARD.
+  gfx_draw.c's d3d11 mode (one-draw buffers written at offset 0) is gone: d3d11 uses the rings of
+  the other devices. Release timedemo 708 -> 856 fps; q3dm1 / the mirror / the portal camera match
+  gl4 as closely as before (the portal view's spread is animation timing: a device against itself
+  differs as much).
 
 ### Recommended order for the gfx fixes
 
@@ -464,8 +468,7 @@ something no caller here hits - document the difference instead.
 - gles3 is a little darker than gl3 / gl4 on the sdl and win32 windows: gfx's compiler adds its
   Windows gles3 gamma fix to `shaders_gles3_dark` (glfw's gles3 uses the plain shaders), as in
   ioq3-rs.
-- d3d11 is slower than the other devices (692 fps against ~900-950): its stream buffers are
-  written WRITE_DISCARD per draw (gap 24).
+- d3d11 is a little slower than d3d12 / gl4 (856 fps against ~905-930 in Release timedemo).
 - Not checked: md4 / iqm models (baseq3 has none) and the x11 window (Linux).
 - Not ioq3-gfx: the RelWithDebInfo client (main's `build/` too) crashes with an access
   violation in JIT-compiled QVM code right after `ui.qvm` loads, whatever the renderer. Run
@@ -534,7 +537,8 @@ unless noted, renderers run alternately:
 | renderer_gfx gles3 | 902 |
 | renderer_gfx vk | 950 |
 | renderer_gfx d3d12 (win32) | 916 |
-| renderer_gfx d3d11 (win32), one-draw buffers (gap 24) | 692 |
+| renderer_gfx d3d11 (win32), one-draw buffers (before gap 24 was fixed) | 692 |
+| renderer_gfx d3d11 (win32), rings (gap 24 fixed, 5 runs) | 841 - 872 |
 
 gl4 is at parity with renderer_opengl1: both are CPU bound at ~1.1 ms a frame, and the runs
 spread by a few percent either way; the other devices are one run each. No Release-gfx step was needed (ioq3-rs's gap 8): gfx is
@@ -560,3 +564,7 @@ each, before and after alternating, means (runs spread ±3-5%):
 No device or window got slower: the sdl rows, drawn at the same size, move -0.9% to +1.6%; the
 win32 / glfw desktop-sized windows draw ~5% fewer pixels now (the work-area cut), their small gains
 within the same spread. No TDR. Gaps 12-14 came after this run; they touch only events.
+
+Gap 24 (d3d11 stream buffers as rings), the same settings, desktop-sized win32 window, 5 runs each:
+d3d11 with the old one-draw buffers (new gfx, every write at offset 0 still discards) 701 - 714,
+mean 708; with the rings 841 - 872, mean 856 (+21%); d3d12 905, gl4 928 in the same session.
