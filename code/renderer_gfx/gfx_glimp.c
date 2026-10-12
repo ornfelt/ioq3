@@ -219,27 +219,6 @@ static HWND GfxGLimp_ClientWindow( void )
 
 /*
 ===============
-GfxGLimp_Win32ClientSize
-
-The client area of the gfx window: gfx's win32 window reports the size it was asked for, not the
-client area Windows gave it
-===============
-*/
-static qboolean GfxGLimp_Win32ClientSize( int *width, int *height )
-{
-	HWND hwnd = GfxGLimp_ClientWindow();
-	RECT rect;
-
-	if ( !hwnd || !GetClientRect( hwnd, &rect ) ) {
-		return qfalse;
-	}
-	*width = rect.right - rect.left;
-	*height = rect.bottom - rect.top;
-	return *width > 0 && *height > 0;
-}
-
-/*
-===============
 GfxGLimp_ReadWindowPixels
 
 glReadPixels of the color buffer, for screenshots and video capture: gfx has no read back, so
@@ -305,11 +284,6 @@ qboolean GfxGLimp_ReadWindowPixels( int x, int y, int width, int height, byte *b
 #else
 
 static qboolean GfxGLimp_DesktopSize( int *width, int *height )
-{
-	return qfalse;
-}
-
-static qboolean GfxGLimp_Win32ClientSize( int *width, int *height )
 {
 	return qfalse;
 }
@@ -383,10 +357,8 @@ static qboolean GfxGLimp_SetMode( int mode, qboolean fullscreen, enum gfx_device
 
 	// gfx makes its windows dpi aware and grows a small one (keeping its shape) to most of the
 	// screen, so the mode is a minimum: the frame is drawn at the client area the window got
-	if ( windowBackend != GFX_WINDOW_WIN32 || !GfxGLimp_Win32ClientSize( &width, &height ) ) {
-		width = (int)gfx_window_get_width( window );
-		height = (int)gfx_window_get_height( window );
-	}
+	width = (int)gfx_window_get_width( window );
+	height = (int)gfx_window_get_height( window );
 	if ( width > 0 && height > 0 && ( width != glConfig.vidWidth || height != glConfig.vidHeight ) ) {
 		ri.Printf( PRINT_ALL, "gfx sized the window to %d %d\n", width, height );
 		glConfig.vidWidth = width;

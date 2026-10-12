@@ -11,18 +11,17 @@ This file is the current snapshot; the history is in git.
 The x11 window is Linux only and not built or run here (no Linux machine, no WSL). Phase 7
 (renderergl2 features) is only done when asked. Merging `gfx` into `main` is the user's decision.
 
-**Last run:** ioq3-rs gap 27 fixed in gfx ("Fixed in gfx"): the vk device signals and presents
-with one semaphore per swapchain image. No ioq3 code change. build_gfx rebuilt; vk on the sdl,
-glfw and win32 windows with the Khronos validation layer - `devmap q3dm0`, two window resizes
-(swapchain recreations), `vid_restart`, quit - logged no validation message at all, no TDR. Before
-it: steps 1-3 of the recommended gfx fixes (the win32 characters and raw-input message, the vk VMA
-leak, the sdl window's mouse buttons).
+**Last run:** ioq3-rs gap 9 fixed in gfx ("Fixed in gfx"): the win32 window reports its client
+area from the start, so `GfxGLimp_Win32ClientSize` is gone and glConfig takes gfx's size on every
+window. build_gfx rebuilt; on the win32 window (r_mode 4) gl4, vk (validation layer clean, no TDR),
+d3d11 and d3d12 print `gfx sized the window to 1291 941`, the client area Windows reports and the
+screenshot's size; phase 2's input check passes there. Before it: gap 27 and steps 1-3 of the
+recommended gfx fixes.
 
 **Next:** nothing in phases 0-6. Possible follow-ups, none required: the x11 window and the
 Linux build on a Linux machine (`cmake/gfx.cmake`'s Linux branch follows gfx's CMakeLists.txt),
-gfx fix step 4 (read back, gap 3) and the other gfx gaps below once gfx has them (the win32
-window's size, ioq3-rs gaps 9 and 28, would drop the client-rectangle workaround), phase 7 when
-asked.
+gfx fix step 4 (read back, gap 3) and the other gfx gaps below once gfx has them (ioq3-rs gap 28,
+the win32 / glfw windows grown past the work area, is the cheapest), phase 7 when asked.
 
 ## Phases
 
@@ -34,7 +33,7 @@ asked.
   `generate_shaders.ps1` / `.sh`), `.gitignore`, `.gitattributes`, README, this file.
   Checkpoint: both configurations build; with `USE_GFX` the client runs renderer_opengl1 - done.
 - [x] **1. Window and device** - `code/renderer_gfx/gfx_glimp.c` (GLimp_* on gfx, the D3D ->
-  win32 rule, desktop size / win32 client size / screen read on Windows, `GfxGLimp_GetWindow`),
+  win32 rule, desktop size / screen read on Windows, `GfxGLimp_GetWindow`),
   `gfx_glimp.h`, `gfx_public.h` (`GfxGLimp_GetWindow`), `gfx_gl.c` / `gfx_gl.h` (new: the qgl
   calls on gfx, the extension entry points), `tr_local.h` (qgl names declared as functions),
   `cmake/renderer_gfx.cmake` (gfx_gl.c in, `SDL_RENDERER_SOURCES` out), `code/sdl/sdl_input.c`
@@ -185,9 +184,8 @@ asked.
 - **GLimp on gfx** (`gfx_glimp.c`): the window is R8G8B8A8 + D24S8 (`r_ext_multisample` as the
   sample count), titled `CLIENT_WINDOW_TITLE`; `r_mode` as in the GL renderers, then the window's
   real size: gfx makes its windows dpi aware and grows a small one to most of the work area, so
-  glConfig takes the size gfx gave (`gfx sized the window to W H`), for the win32 window from
-  Windows' client rectangle of this thread's `ioquake3` window (it reports the requested size,
-  ioq3-rs gap 9). `r_fullscreen` and `r_mode -2` make a desktop-sized window (desktop size from
+  glConfig takes the size gfx gave (`gfx sized the window to W H`, gfx's client area on every
+  window). `r_fullscreen` and `r_mode -2` make a desktop-sized window (desktop size from
   GetSystemMetrics on Windows, 640x480 elsewhere for now); toggling `r_fullscreen` runs
   `vid_restart`; `r_swapInterval` applied at creation; `minimize` prints that gfx cannot. A D3D
   `r_gfxDevice` with another `r_gfxWindow` uses the win32 window (console message), as gfx makes
@@ -302,9 +300,6 @@ so the rest are expected here too):
 - ioq3-rs gap 3: no read back of the color or depth buffer (workaround on Windows: the color from
   the screen through GDI, one frame late and only what is visible; no depth, so `r_flares 1`'s
   depth test reads zeros - one warning - and flares show only within ~28 units of the eye).
-- ioq3-rs gap 9: the win32 window's `gfx_window_get_width` / `_height` give the requested size,
-  not the client area (r_mode 4: 800x600 reported, 1291x941 client; sdl / glfw report their real
-  1307x980). Workaround: the client rectangle from Windows.
 - ioq3-rs gap 11: the sdl window maps keys by SDL keycode (layout) without a scancode: on this
   Swedish layout the key left of 1 (`§`) arrives as GFX_KEY_UNKNOWN there, where win32 / glfw
   map it by position to GFX_KEY_GRAVE (the console key). The SDL path makes it K_WORLD_53, which
@@ -371,6 +366,12 @@ and wc_clean_new's `lib/gfx` copy), so ioq3-rs's gfx.dll gets them too once rebu
   render-finished semaphore per frame in flight, which the present engine could still hold - the
   validation layer's VUID-vkQueueSubmit-pSignalSemaphores-00067 at every vk start is gone, so a
   vk run with the layer now logs nothing.
+- **ioq3-rs gap 9** (gfx `dad38d3`): the win32 window takes its client area as its size once it
+  is made (`gfx_win32_create_window`), so the device is created at the size it draws at and
+  `gfx_window_get_width` / `_height` give it before the window is shown, as the sdl / glfw
+  windows do - they gave the size asked for (r_mode 4: 800x600 for a 1291x941 client) until the
+  first WM_SIZE at show. `GfxGLimp_Win32ClientSize`, the client rectangle read from Windows, is
+  gone (the window lookup stays for glReadPixels' screen read).
 
 ### Recommended order for the gfx fixes
 
