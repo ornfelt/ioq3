@@ -153,7 +153,7 @@ typedef struct {
 	byte		currentRgba[4];	// currentColor as the vertices take it
 	vec2_t		currentSt[GFX_GL_TEXTURE_UNITS];
 
-	int			overbrightPasses;	// GLimp_SetGamma's overbright shift (drawn in phase 5)
+	int			overbrightPasses;	// GLimp_SetGamma's overbright shift (GfxGL_Overbright)
 
 	qboolean	warnedImmediate;
 	qboolean	warnedReadPixels;
@@ -177,6 +177,7 @@ extern gfxGl_t gfxGl;
 qboolean GfxGL_Init( struct gfx_window *window, enum gfx_device_backend backend, char *error, int errorSize );
 void GfxGL_Shutdown( void );
 void GfxGL_BeginFrame( void );
+void GfxGL_Overbright( void );
 
 // the GL_ARB_multitexture / GL_EXT_compiled_vertex_array entry points GLimp_Init puts into
 // qgl.h's pointers (sdl_glimp.c gets them from the driver)

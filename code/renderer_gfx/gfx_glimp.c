@@ -640,6 +640,7 @@ void GLimp_EndFrame( void )
 	// don't flip if drawing to front buffer
 	if ( Q_stricmp( r_drawBuffer->string, "GL_FRONT" ) != 0 )
 	{
+		GfxGL_Overbright();
 		gfx_swap_buffers( gfxGl.window );
 	}
 
@@ -734,8 +735,8 @@ static int GfxGLimp_RampShift( unsigned char *ramps[3] )
 =================
 GLimp_SetGamma
 
-gfx has no gamma ramp: GLimp_EndFrame doubles the frame once per overbright bit (GFX_STATUS.md
-phase 5), which is the ramp R_SetColorMappings makes with r_gamma 1. A ramp with a gamma curve
+gfx has no gamma ramp: GLimp_EndFrame doubles the frame once per overbright bit
+(GfxGL_Overbright), which is the ramp R_SetColorMappings makes with r_gamma 1. A ramp with a gamma curve
 (r_gamma changed since GLimp_Init) keeps only its overbright shift until the next vid_restart,
 which moves the gamma into the textures.
 =================

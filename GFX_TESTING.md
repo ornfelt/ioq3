@@ -88,6 +88,30 @@ $p.WaitForExit(90000)
 - `+togglemenu` opens the main menu (a fresh home starts on the CD key menu), `+cinematic
   idlogo.RoQ` plays a cinematic through RE_StretchRaw.
 - Injected input for the input checks: GFX_STATUS.md, testing notes.
+- The command line is cut at 1024 characters: put a longer script into a cfg, copy it into
+  `<home>\baseq3\` and run it with `+exec <name>.cfg` (`wait` works there as on the command line).
+- A Windows Firewall prompt for a newly built `ioquake3.exe` dims the whole desktop, and so the
+  screen-read screenshots: close it (Cancel is enough) before comparing frames.
+- The views and cfgs of the 3D checks (mirror, portal camera, fog, dynamic lights, marks,
+  shadows, a full game with bots) are in GFX_STATUS.md, testing notes.
+
+## Timedemo
+
+In a Release build (`cmake --build $W/build_gfx --config Release`, the paks in
+`build_gfx\Release\baseq3\`), fullscreen at the desktop size, no frame cap, the game modules as
+dlls, quitting when the demo ends:
+
+```powershell
+$R = "$env:code_root_dir/Code2/C/ioq3/build_gfx/Release"
+foreach ($renderer in "gfx", "opengl1") {
+    $H = "$env:TEMP\ioq3-timedemo-$renderer"; Remove-Item $H -Recurse -Force -ErrorAction SilentlyContinue
+    $p = Start-Process "$R/ioquake3.exe" -WorkingDirectory $R -PassThru -ArgumentList "+set fs_homepath $H +set cl_renderer $renderer +set logfile 2 +set sv_pure 0 +set vm_cgame 0 +set vm_ui 0 +set r_fullscreen 1 +set r_mode -2 +set r_swapInterval 0 +set com_maxfps 0 +set timedemo 1 +set nextdemo quit +demo four"
+    $p.WaitForExit(120000) | Out-Null
+    Select-String -Path "$H\baseq3\qconsole.log" -Pattern "fps"
+}
+```
+
+Run the renderers alternately a few times; the numbers are in GFX_STATUS.md, Performance.
 
 ## Vulkan and D3D12: GPU safety
 

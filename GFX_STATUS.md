@@ -6,22 +6,22 @@ Work happens on the `gfx` branch; `main` stays the plain fork. The design follow
 finished renderer_gfx (`$code_root_dir/Code2/Rust/ioq3-rs`, `gfx` branch, its `GFX_STATUS.md`).
 This file is the current snapshot; the history is in git.
 
-**Last run:** phase 3. renderer_gfx draws through gfx: new `gfx_draw.c` / `.h` (the one program,
-vertex / index / uniform rings, the pipeline-key cache, bind caching, draw submission),
-`gfx_shader.c` / `.h` (the `.gfx` loader), and `gfx_gl.c`'s texture staging and upload,
-glTexSubImage2D, glDrawElements / glArrayElement / glBegin..glEnd, clears through a bound
-pipeline, the uniforms. It ports ioq3-rs's final design (after its phases 4-6), not its phase 3,
-so polygon offset, the clip plane and the D3D / Vulkan depth remap are already in the uniforms.
-Checked on gl4 (RelWithDebInfo, windowed r_mode 4, screenshots against renderer_opengl1 with
-`r_ignorehwgamma 1`): the CD key menu, the console with its fonts, the main menu, a cinematic
-(`cinematic idlogo.RoQ`), the in-game menu over q3dm1 and q3dm1's first view all match; the main
-menu after `vid_restart` from sdl to win32 to glfw draws on each; `USE_GFX=OFF` builds.
+**Last run:** phases 4 and 5. Phase 4 needed no code: the 3D that came with phase 3 matches
+renderer_opengl1 on gl4 (sdl window, RelWithDebInfo, screenshots side by side): q3dm0's mirror
+and portal camera, q3dm12's fog and sky, plasma / rocket dynamic lights, marks and brass, blob
+and stencil shadows (`cg_shadows 1` / `2`), md3 players and weapons in first and third person,
+`r_primitives 1`, `r_showtris` / `r_shownormals`, `vid_restart` in a map with
+`r_vertexlight 1`; a full q3dm1 game with four bots; `screenshot`, `screenshotJPEG` and video
+capture (`video` in `demo four`). Phase 5: overbright as end-of-frame blend passes
+(`GfxGL_Overbright`, called by GLimp_EndFrame) and glReadPixels shifting them out again - a
+fullscreen (`r_mode -2`) capture matches renderer_opengl1's, and a window with the default
+`r_ignorehwgamma 0` too; `timedemo` on gl4 in Release is at parity (Performance).
 
-**Next:** phase 4 - 3D checks, as most of the 3D code came with phase 3: q3dm1 with bots (a full
-game), q3dm0's mirror and portal camera (`setviewpos -1148 -1100 30 270`, `-1152 -1700 30 270`),
-q3dm12 fog, dynamic lights (rocket / plasma), marks and blob shadows, sky, md3 / iqm models,
-`r_primitives 1` / `3`, `screenshotJPEG` and video capture - each against renderer_opengl1 on gl4;
-fix what differs. ioq3-rs's phase 4 commit (`ab3f73c`) and its testing notes list the views.
+**Next:** phase 6 - the other devices and windows, gl4's checks on each (q3dm0's mirror / portal
+views, the video sign, HUD; ioq3-rs's Backends section): gl3 and gles3 on sdl / glfw / win32,
+d3d11 (win32), then d3d12 with its debug layer if Graphics Tools are installed, then vk with the
+Khronos validation layer (ioq3-rs built one in `target/tools/vvl/`, GFX_TESTING.md) - one short
+scripted run at a time, the System log checked for TDR events (4101) after each GPU run.
 
 ## Phases
 
@@ -52,12 +52,15 @@ fix what differs. ioq3-rs's phase 4 commit (`ab3f73c`) and its testing notes lis
   uniforms with polygon offset / clip plane / depth remap), `gfx_glimp.c` (fatal error when the
   shaders cannot load), `cmake/renderer_gfx.cmake` (the two sources), README, `GFX_TESTING.md`
   (new). Checkpoint: console and menus on gl4 - done.
-- [ ] **4. 3D** - the code is in (phase 3 ported ioq3-rs's final gfx_gl / gfx_draw); left: the
-  checks of world / curves / models / sky / fog / dlights / marks / portals / mirrors /
-  `r_primitives`, `screenshot` / `screenshotJPEG` / video capture against renderer_opengl1, and
-  fixing what differs. Checkpoint: a full game on q3dm1 with bots.
-- [ ] **5. Parity and speed** - frame comparisons against renderer_opengl1, overbright as blend
-  passes (and glReadPixels taking the shift out again), `timedemo` on gl4 in a Release build.
+- [x] **4. 3D** - no new code (phase 3 ported ioq3-rs's final gfx_gl / gfx_draw). Checked against
+  renderer_opengl1 on gl4: world, curves, sky, md3 models, fog, dynamic lights, marks, blob and
+  stencil shadows, mirror and portal camera, `r_primitives 1` / `3`, `r_showtris` /
+  `r_shownormals`, `vid_restart` in a map, `screenshot` / `screenshotJPEG` / video capture.
+  Checkpoint: a full game on q3dm1 with four bots - done.
+- [x] **5. Parity and speed** - `gfx_gl.c` / `.h` (`GfxGL_Overbright`; glReadPixels takes the
+  overbright shift out), `gfx_glimp.c` (GLimp_EndFrame draws it before the swap). Frame
+  comparisons windowed (both `r_ignorehwgamma` values) and fullscreen; `timedemo` on gl4 in
+  Release at parity with renderer_opengl1 - done.
 - [ ] **6. All backends** - gl3, gles3, d3d11, d3d12, vk (validation layer); sdl, glfw, win32
   windows; x11 on Linux.
 - [ ] 7. Optional, only when asked: renderergl2 features on gfx.
@@ -192,7 +195,13 @@ fix what differs. ioq3-rs's phase 4 commit (`ab3f73c`) and its testing notes lis
 - **Gamma** (ioq3-rs gap 2): gfx has no gamma ramp. `deviceSupportsGamma` only with `r_gamma 1`
   and `r_ignorehwgamma 0`; GLimp_SetGamma keeps the ramp's overbright shift
   (`gfxGl.overbrightPasses`; any other ramp: a note that `r_gamma` needs `vid_restart`, and
-  `tr.overbrightBits`). The end-of-frame blend passes that apply it come in phase 5.
+  `tr.overbrightBits`). GLimp_EndFrame applies it before the swap (`GfxGL_Overbright`, as
+  ioq3-rs's `gfx_gl_overbright`): the frame doubled once per overbright bit by a full-window
+  triangle blended (GL_DST_COLOR, GL_ONE) with alpha, depth and stencil writes off - `dst + dst`,
+  clamped as the ramp clamps. It goes through GfxDraw_Draw like any draw (its pipeline joins the
+  key cache); GL's emulated state is not touched, the viewport is set back to GL's. Only
+  fullscreen has overbright bits (R_SetColorMappings: never in a window), as with
+  renderer_opengl1's hardware ramp.
 - **Window handoff** - a plain call, where ioq3-rs needed an exported `GetGfxWindow` looked up in
   the renderer dll: `GfxGLimp_GetWindow()` (`gfx_public.h`) returns renderer_gfx's window, NULL
   while it has none (another renderer loaded, or before GLimp_Init / after GLimp_Shutdown).
@@ -239,9 +248,9 @@ fix what differs. ioq3-rs's phase 4 commit (`ab3f73c`) and its testing notes lis
   area from the screen (GDI BitBlt + GetDIBits of this thread's `ioquake3` window, bottom-up rows
   as GL gives them): the frame presented last, and a covered window shows what covers it. Depth
   reads (flares) and other platforms get zeros (one warning). The callers apply the gamma ramp
-  themselves (`R_GammaCorrect`), so fullscreen screenshots show the overbright ramp applied - as
-  renderer_opengl1's do; once phase 5 draws the overbright passes, glReadPixels takes the shift
-  out again (`v >> n`, as ioq3-rs).
+  themselves (`R_GammaCorrect`), and the screen has the overbright passes in it where a GL back
+  buffer has not, so glReadPixels shifts them out again (`v >> n`, as ioq3-rs): fullscreen
+  screenshots and video frames match renderer_opengl1's.
 - **Shaders.** `code/renderer_gfx/shaders/` is ioq3-rs's `shaders/` unchanged: `generic.vs.gfxs` /
   `generic.fs.gfxs` and the compiled `shaders/` (gl3, gl4, gles3), `shaders_d3/` (d3d11; d3d12
   loads it), `shaders_gles3_dark/` (compiled from a folder named so: gfx's compiler adds its
@@ -263,14 +272,14 @@ fix what differs. ioq3-rs's phase 4 commit (`ab3f73c`) and its testing notes lis
 
 "2D": the console, the main menu and a cinematic draw like renderer_opengl1, `vid_restart` in
 and out, clean quit; "+ input": phase 2's input check passes (keys, chars, console key, mouse
-motion / buttons / wheel, focus loss, close); "q3dm1": its first view and in-game menu match
-renderer_opengl1 (sdl window). The other devices wait for phase 6 (GPU safety: each feature on
-gl4 first). The x11 window and the Linux build are untested here (no Linux machine;
+motion / buttons / wheel, focus loss, close); "3D": phase 4's checks and the full q3dm1 game
+match renderer_opengl1, and fullscreen overbright (phase 5); "timedemo": Performance. The other
+devices wait for phase 6 (GPU safety: each feature on gl4 first). The x11 window and the Linux build are untested here (no Linux machine;
 `cmake/gfx.cmake`'s Linux branch follows gfx's CMakeLists.txt).
 
 | | sdl | glfw | win32 |
 | --- | --- | --- | --- |
-| gl4 (baseline) | 2D + input + q3dm1 | 2D + input | 2D + input |
+| gl4 (baseline) | 2D + input + 3D + timedemo | 2D + input | 2D + input + timedemo |
 | gl3 | - | - | - |
 | gles3 | - | - | - |
 | d3d11 | - (uses win32, not run yet) | - (same) | - |
@@ -284,9 +293,10 @@ so the rest are expected here too):
 
 - ioq3-rs gap 1: no fullscreen, display mode list, desktop size, window position or minimize
   (workaround: a desktop-sized window, the size from GetSystemMetrics on Windows only).
-- ioq3-rs gap 2: no gamma ramp (workaround: overbright as end-of-frame blend passes, phase 5).
+- ioq3-rs gap 2: no gamma ramp (workaround: overbright as end-of-frame blend passes).
 - ioq3-rs gap 3: no read back of the color or depth buffer (workaround on Windows: the color from
-  the screen through GDI, one frame late and only what is visible; no depth).
+  the screen through GDI, one frame late and only what is visible; no depth, so `r_flares 1`'s
+  depth test reads zeros - one warning - and flares show only within ~28 units of the eye).
 - ioq3-rs gap 9: the win32 window's `gfx_window_get_width` / `_height` give the requested size,
   not the client area (r_mode 4: 800x600 reported, 1291x941 client; sdl / glfw report their real
   1307x980). Workaround: the client rectangle from Windows.
@@ -338,7 +348,6 @@ redefined), as gfx's own build does.
 
 ## Open problems / accepted differences from renderer_opengl1
 
-- 3D is drawn but not checked beyond q3dm1's first view yet (phase 4).
 - renderer_gfx draws at the window's real (dpi-scaled) size, where renderer_opengl1 draws at the
   `r_mode` size and Windows scales its window up: the same picture, sharper.
 - `r_textureMode` changed in a running game reaches only images loaded after a `vid_restart`
@@ -347,9 +356,16 @@ redefined), as gfx's own build does.
   glfw windows and the SDL path type them.
 - On release of a grabbed mouse the cursor goes back to where the grab started, not to the window
   center as on the SDL path (gfx_set_mouse_position gap above; ioq3-rs does the same).
-- Fullscreen frames have no overbright on screen until phase 5 (darker than renderer_opengl1
-  with its hardware ramp); fullscreen screenshots already have the ramp applied by
-  `R_GammaCorrect`.
+- `screenshot` / `screenshotJPEG` / video capture read the screen (Windows only; the frame
+  presented last; a covered or dimmed window - a Windows Firewall prompt dims the desktop -
+  captures that). Flares (`r_flares 1`, off by default) have no depth to test (gap 3).
+- `r_primitives 3` draws untextured world surfaces: renderergl1's R_ArrayElementDiscrete passes
+  0 / 1 instead of GL_TEXTURE0_ARB / GL_TEXTURE1_ARB to glMultiTexCoord2fARB, which renderer_gfx
+  ignores as GL does (ioq3-rs: the same; renderer_opengl1 crashes in the driver there).
+- `r_primitives 1` on renderer_gfx matches the default path and renderer_opengl1's default;
+  renderer_opengl1's own `r_primitives 1` frame differs from its default on this AMD driver
+  (darker, bluer lightmapped walls) - the driver's, not renderer_gfx's.
+- Not checked: md4 / iqm models (baseq3 has none) and the x11 window (Linux).
 - Not ioq3-gfx: the RelWithDebInfo client (main's `build/` too) crashes with an access
   violation in JIT-compiled QVM code right after `ui.qvm` loads, whatever the renderer. Run
   with `+set vm_ui 1 +set vm_cgame 1 +set vm_game 1` (the interpreter) or the dll modules
@@ -384,9 +400,36 @@ redefined), as gfx's own build does.
   home starts on the CD key menu, `togglemenu` opens the main menu. The window switch:
   `+togglemenu +wait 60 +screenshot +seta r_gfxWindow win32 +vid_restart +wait 150 +togglemenu
   +wait 60 +screenshot`, then glfw. How to run is in [GFX_TESTING.md](GFX_TESTING.md).
+- Phase 4 / 5 checks (both renderers, `screenshotJPEG`, compared scaled side by side; ioq3-rs's
+  views): `+devmap q3dm0 +wait 200 +setviewpos -1148 -1100 30 270` (mirror), `-1152 -1700 30 270`
+  (portal camera); `+set bot_enable 0 +devmap q3dm12 +wait 150 +noclip +setviewpos -660 -720
+  -200 270` (fog); an `exec`ed cfg (copied into `<home>/baseq3`) with `give all`, `weapon 8`,
+  `+attack` (plasma lights and marks; `+lookdown` aims at the floor), `cg_thirdperson 1` and
+  `cg_shadows 2` (stencil shadows - the idle animation moves them, so compare a few shots), a
+  full game with `addbot sarge 2` x4, `r_primitives 1` / `3`, `r_showtris 1`, `r_shownormals 1`,
+  `r_vertexlight 1` + `vid_restart`; fullscreen overbright with `+set r_fullscreen 1 +set r_mode
+  -2 +set r_ignorehwgamma 0`. `video <name>` only works while a demo plays (`demo four`).
+- The command line is cut at 1024 characters (`main`'s `commandLine[MAX_STRING_CHARS]` in
+  sys_main.c): long scripts go into a cfg, run with `+exec`. `+set nextdemo quit` ends a
+  timedemo run.
+- Screenshots read the screen: the check script keeps the game window topmost
+  (SetWindowPos HWND_TOPMOST, no activation) so the terminal does not cover it.
 - The game console goes to stderr and `qconsole.log`; gfx's `[gfx] using ...` lines go to
   stdout (ioquake3 is a GUI program on Windows: `Start-Process -RedirectStandardOutput`).
 
 ## Performance (timedemo)
 
-Not measured yet (phase 5).
+`timedemo 1`, `demo four` (pak8's four.dm_68, 1260 frames), fullscreen 1920x1080 (`r_mode -2`,
+one overbright bit), `r_swapInterval 0`, `com_maxfps 0`, Release build, cgame / ui as dlls
+(`sv_pure 0`, `vm_cgame 0`, `vm_ui 0`), `+set nextdemo quit`, this machine (AMD GPU), sdl window
+unless noted, renderers run alternately:
+
+| renderer | fps |
+| --- | --- |
+| renderer_opengl1 | 907 - 952 (4 runs) |
+| renderer_gfx gl4 | 910 - 933 (4 runs) |
+| renderer_gfx gl4, win32 window | 942 |
+
+gl4 is at parity with renderer_opengl1: both are CPU bound at ~1.1 ms a frame, and the runs
+spread by a few percent either way. No Release-gfx step was needed (ioq3-rs's gap 8): gfx is
+compiled in the build's configuration.

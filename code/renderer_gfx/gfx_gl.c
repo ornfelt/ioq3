@@ -700,6 +700,60 @@ static void GfxGL_Submit( gfxPrimitiveKey_t primitive, const gfxVertex_t *vertic
 
 /*
 ===============
+GfxGL_Overbright
+
+GLimp_EndFrame's half of the hardware gamma ramp (gfx has none, GFX_STATUS.md gap 2): a ramp that
+shifts by the overbright bits, min( 255, i << n ), is the frame doubled n times, each a
+full-window triangle blended with ( GL_DST_COLOR, GL_ONE ) - dst * 1 + dst, clamped as the ramp
+clamps. Alpha, depth and stencil are left alone and GL's state is not touched (the back end
+caches it); only the viewport goes back to GL's.
+===============
+*/
+void GfxGL_Overbright( void )
+{
+	// one triangle over all of clip space
+	static const float corners[3][2] = { { -1.0f, -1.0f }, { 3.0f, -1.0f }, { -1.0f, 3.0f } };
+	gfxDrawState_t state;
+	gfxVertex_t vertices[3];
+	int i;
+
+	if ( !gfxGl.device || gfxGl.overbrightPasses <= 0 ) {
+		return;
+	}
+
+	Com_Memset( &state, 0, sizeof( state ) );
+	state.key.primitive = GFX_PRIMITIVE_KEY_TRIANGLES;
+	state.key.blend.enabled = 1;
+	state.key.blend.src = (byte)GfxGL_BlendFunction( GL_DST_COLOR );
+	state.key.blend.dst = (byte)GfxGL_BlendFunction( GL_ONE );
+	state.key.blend.colorMask = GFX_COLOR_MASK_R | GFX_COLOR_MASK_G | GFX_COLOR_MASK_B;
+	state.key.depthStencil.depthFunc = (byte)GfxGL_CompareFunction( GL_ALWAYS );
+	state.key.rasterizer.cull = GFX_CULL_NONE;
+	state.key.rasterizer.fill = GFX_FILL_SOLID;
+	Com_Memcpy( state.uniforms.mvp, gfxGlIdentity, sizeof( gfxGlIdentity ) );
+	state.uniforms.params[0] = GFX_ALPHA_TEST_NONE;
+	state.uniforms.params[2] = GFX_TEX_ENV_OFF;
+	state.uniforms.params[3] = GFX_TEX_ENV_OFF;
+	state.uniforms.clipPlane[3] = 1.0f;
+	state.uniforms.depth[1] = gfxGl.depthZeroToOne ? 1.0f : 0.0f;
+	state.lineWidth = 1.0f;
+
+	Com_Memset( vertices, 0, sizeof( vertices ) );
+	for ( i = 0; i < 3; i++ ) {
+		vertices[i].xyz[0] = corners[i][0];
+		vertices[i].xyz[1] = corners[i][1];
+		vertices[i].rgba[0] = vertices[i].rgba[1] = vertices[i].rgba[2] = vertices[i].rgba[3] = 255;
+	}
+
+	gfx_set_viewport( gfxGl.device, 0, 0, (uint32_t)glConfig.vidWidth, (uint32_t)glConfig.vidHeight, 0.0f, 1.0f );
+	for ( i = 0; i < gfxGl.overbrightPasses; i++ ) {
+		GfxDraw_Draw( &state, vertices, 3, NULL, 0 );
+	}
+	GfxGL_ApplyViewport();
+}
+
+/*
+===============
 GfxGL_GatherArrays
 
 Writes array elements first .. first + count - 1 of the enabled client arrays as vertices (a
@@ -1269,7 +1323,9 @@ qglReadPixels
 gfx has no read back of its framebuffers, so GL_RGB / GL_RGBA bytes are read from the window on
 the screen (GfxGLimp_ReadWindowPixels: the frame presented last, Windows only); anything else,
 or a failed read, gives zeros and one warning. GL_PACK_ALIGNMENT is 1 (qglGetIntegerv), so the
-rows are packed.
+rows are packed. The screen has the overbright passes in it (GfxGL_Overbright), which a GL back
+buffer has not - its readers apply the gamma ramp themselves (R_GammaCorrect) - so they are
+shifted out again.
 ===============
 */
 void APIENTRY qglReadPixels( GLint x, GLint y, GLsizei width, GLsizei height, GLenum format, GLenum type, GLvoid *pixels )
@@ -1277,7 +1333,7 @@ void APIENTRY qglReadPixels( GLint x, GLint y, GLsizei width, GLsizei height, GL
 	int components, componentSize;
 	size_t size;
 	byte *bgra, *out;
-	int i, numPixels;
+	int i, numPixels, shift;
 
 	switch ( format ) {
 	case GL_RGBA:
@@ -1317,10 +1373,11 @@ void APIENTRY qglReadPixels( GLint x, GLint y, GLsizei width, GLsizei height, GL
 		bgra = ri.Hunk_AllocateTempMemory( numPixels * 4 );
 		if ( GfxGLimp_ReadWindowPixels( x, y, width, height, bgra ) ) {
 			out = (byte *)pixels;
+			shift = MAX( gfxGl.overbrightPasses, 0 );
 			for ( i = 0; i < numPixels; i++ ) {
-				out[0] = bgra[i * 4 + 2];
-				out[1] = bgra[i * 4 + 1];
-				out[2] = bgra[i * 4 + 0];
+				out[0] = bgra[i * 4 + 2] >> shift;
+				out[1] = bgra[i * 4 + 1] >> shift;
+				out[2] = bgra[i * 4 + 0] >> shift;
 				if ( components == 4 ) {
 					out[3] = 255;
 				}
