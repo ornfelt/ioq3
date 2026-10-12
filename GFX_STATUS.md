@@ -385,6 +385,14 @@ and wc_clean_new's `lib/gfx` copy), so ioq3-rs's gfx.dll gets them too once rebu
   the whole screen, fitted only with a thin taskbar along the bottom; it is centred in the work
   area now. A size asked for that is larger than the work area cannot fit; it keeps its title bar
   inside. sdl's window was inside already and is unchanged.
+- **ioq3-rs gap 26** (gfx `ee04d0f`): a vk device that fails to initialize is deleted instead of
+  crashing the process. `vk_dtr` ran on the half-made device and called `DeviceWaitIdle` and the
+  other device functions before `load_device_proc` had loaded them (a call through NULL), so
+  renderer_gfx's fallback never ran; it now destroys only the VkDevice (an instance function)
+  when the device functions were never loaded, and frees command buffers only from a pool that
+  was made. Checked with SwiftShader as the only Vulkan driver (refused then, gap 25): "no
+  suitable physical device found", then `Falling back on r_gfxDevice gl4, r_gfxWindow sdl` on the
+  sdl and win32 windows, validation layer clean.
 
 ### Recommended order for the gfx fixes
 
