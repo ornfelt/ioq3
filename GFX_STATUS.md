@@ -11,16 +11,10 @@ This file is the current snapshot; the history is in git.
 The x11 window is Linux only and not built or run here (no Linux machine, no WSL). Phase 7
 (renderergl2 features) is only done when asked. Merging `gfx` into `main` is the user's decision.
 
-**Last run:** phases 4, 5 and 6. Phase 4 needed no code: the 3D that came with phase 3 matches
-renderer_opengl1 on gl4 (q3dm0's mirror and portal camera, q3dm12's fog and sky, dynamic lights,
-marks, blob and stencil shadows, md3 models, `r_primitives`, debug draws, `vid_restart` in a
-map, a full q3dm1 game with four bots, `screenshot` / `screenshotJPEG` / video capture). Phase 5:
-overbright as end-of-frame blend passes (`GfxGL_Overbright`) with glReadPixels shifting them out
-again - fullscreen and windowed frames match renderer_opengl1's - and Release timedemo at
-parity. Phase 6 needed no code either (phase 3 already had ioq3-rs's D3D / Vulkan fixes): gl3,
-gles3 and vk on the sdl, glfw and win32 windows, d3d11 and d3d12 on win32, draw q3dm0 like gl4;
-vk with the Khronos validation layer reports only two gfx messages; runtime switches between
-devices and windows with `vid_restart`; a timedemo on every device; no driver reset (event 4101).
+**Last run:** the gfx fixes (gfx gaps, "Fixed in gfx"), one step at a time. Step 1 is in gfx:
+the win32 window's characters and raw-input message; `GfxGLimp_Error`'s filter for that message
+is gone. Checked on the win32 window with injected input: `å ä ö § €` reach the console, clicks
+and the wheel while grabbed print nothing at `developer 1`.
 
 **Next:** nothing in phases 0-6. Possible follow-ups, none required: the x11 window and the
 Linux build on a Linux machine (`cmake/gfx.cmake`'s Linux branch follows gfx's CMakeLists.txt),
@@ -46,8 +40,7 @@ asked.
 - [x] **2. Input** - `code/gfx/gfx_input.c` / `.h` (new, compiled into the client by
   `cmake/renderer_gfx.cmake`): event ring, key map, chars, relative mouse with grab / release,
   focus with key release, resize, close; `code/sdl/sdl_input.c` (gfx dispatch, SDL device / quit
-  events taken before gfx polls, `IN_IsConsoleKey` shared); `gfx_glimp.c` (gfx's raw-input
-  no-motion error to the developer console); README.
+  events taken before gfx polls, `IN_IsConsoleKey` shared); README.
   Checkpoint: keys, text, mouse, focus, close on the sdl, glfw and win32 windows - done.
 - [x] **3. 2D** - `code/renderer_gfx/gfx_draw.c` / `.h` (new: one program, rings, pipeline-key
   cache, bind caching, draw submission), `gfx_shader.c` / `.h` (new: `.gfx` parsing, program
@@ -246,9 +239,6 @@ asked.
   `IN_IsConsoleKey` is shared (not `static` under `USE_GFX`), as its parse cache follows
   `cl_consoleKeys->modified`. `IN_GfxWindowWithoutSDL()` still lets IN_Init run without SDL video
   on a non-SDL gfx window; the phase 1 poll in IN_Frame is gone (IN_GfxProcessEvents polls).
-- **gfx's raw-input warning** (`gfx_glimp.c`): gfx's win32 window reports each raw mouse input
-  without motion (a click or the wheel while grabbed) as an error; `GfxGLimp_Error` sends that
-  one message to the developer console, the rest stay warnings.
 - **glReadPixels from the screen** (ioq3-rs gap 3; here from phase 1, so screenshots can check
   each phase). On Windows, glReadPixels of GL_RGB / GL_RGBA bytes reads the gfx window's client
   area from the screen (GDI BitBlt + GetDIBits of this thread's `ioquake3` window, bottom-up rows
@@ -348,14 +338,6 @@ New here (ioq3-rs has the same behaviour, unrecorded):
   GFX_MOUSE_BUTTON_4), so one physical button is two gfx buttons. Workaround: gfx_input.c
   renumbers by window backend (X1 is K_MOUSE4 on every window, as on the SDL path; ioq3-rs, by
   its code, gives K_MOUSE5 for X1 on the sdl window).
-- The win32 window's WM_INPUT reports a raw mouse input without motion (button or wheel
-  transitions, which raw input also delivers while grabbed) as an error, "not RELATIVE or ABSOLUTE
-  mouse move: 0" - a warning per click in game through the error callback. Workaround: that
-  message goes to the developer console (`gfx_glimp.c`).
-- The win32 window drops every character whose UTF-16 low byte is 0x80 or more (`å ä ö §`, ...)
-  with "invalid event codepoint": WM_CHAR packs the code unit into a `char tmp[2]` and jks's
-  `utf16_decode1` widens the signed `char` bytes, so 0xA7 becomes 0xFFFFFFA7 and `utf8_encode`
-  refuses it. No workaround (the sdl / glfw windows deliver them).
 - `gfx_set_mouse_position` takes screen coordinates on the win32 window (SetCursorPos) and window
   coordinates on the sdl / glfw ones - gfx_input.c does not warp the cursor.
 
@@ -366,17 +348,26 @@ configuration). Compiling gfx's sources gives gfx's own `/W3` warnings (C4244 / 
 conversions, `HAVE_STDINT_H` redefined by `config.h`, `NDEBUG` redefined in `gl4.c`, `APIENTRY`
 redefined), as gfx's own build does.
 
+### Fixed in gfx
+
+Found here, fixed in gfx's sources (`gfx_dll/gfx`, and the same in `gfx_benilla` and
+wc_clean_new's `lib/gfx` copy), so ioq3-rs's gfx.dll gets them too once rebuilt:
+
+- **Step 1** (gfx `ed29d8f`): the win32 window decodes WM_CHAR through the ANSI code page - its
+  window class is ANSI (`RegisterClassExA`), so `wparam` is a code-page byte, not a UTF-16 unit
+  (`€` comes as 0x80 on code page 1252); the old signed `char tmp[2]` UTF-16 decode dropped every
+  byte of 0x80 and up with "invalid event codepoint". `å ä ö § €` now type on the win32 window.
+  A raw mouse input without motion (a click or the wheel while grabbed) is skipped quietly
+  instead of reported as "not RELATIVE or ABSOLUTE mouse move"; `GfxGLimp_Error`'s filter for it
+  is gone. Characters of a double-byte or UTF-8 ANSI code page still need more than one WM_CHAR
+  and are dropped (as before).
+
 ### Recommended order for the gfx fixes
 
 All of these are in gfx's shared sources, so ioq3-rs's gfx.dll has them too (only gap 3 is in
 its `GFX_STATUS.md`); one fix in gfx serves both ioq3 versions. Cheapest and safest first:
 
-1. **The win32 characters and the raw-input message** - not breaking. `windows/win32.c:663`:
-   `char tmp[2]` as `unsigned char` (or decode `wparam` as one UTF-16 unit) lets `å ä ö §`
-   through - what callers already expect; characters outside the BMP still need surrogate
-   pairing (unchanged). `windows/win32.c:522`: a raw input without motion is skipped quietly
-   instead of `GFX_ERROR`. renderer_gfx's `GfxGLimp_Error` filter then has nothing to filter
-   (harmless, can go).
+1. **Done: the win32 characters and the raw-input message** (Fixed in gfx, step 1).
 2. **The vk VMA leak** - `vmaDestroyAllocator` in `vk_dtr` before `DestroyDevice`
    (`devices/vk.c`). Not breaking only with care: without `NDEBUG`, VMA's `VMA_ASSERT_LEAK` is
    `assert` (`vk_mem_alloc.h`), so a program that destroys the device with gfx objects still
@@ -408,8 +399,6 @@ something no caller here hits - document the difference instead.
   `r_mode` size and Windows scales its window up: the same picture, sharper.
 - `r_textureMode` changed in a running game reaches only images loaded after a `vid_restart`
   (gap 16, one warning).
-- Non-ASCII characters (`å ä ö`) cannot be typed on the win32 window (gfx gap above); the sdl /
-  glfw windows and the SDL path type them.
 - On release of a grabbed mouse the cursor goes back to where the grab started, not to the window
   center as on the SDL path (gfx_set_mouse_position gap above; ioq3-rs does the same).
 - `screenshot` / `screenshotJPEG` / video capture read the screen (Windows only; the frame

@@ -21,9 +21,6 @@ The GL calls of the back end go to the device through gfx_gl.c.
 
 #define R_MODE_FALLBACK 3 // 640 * 480
 
-// the start of the error gfx's win32 window reports for a raw mouse input without motion
-#define GFX_RAW_INPUT_NO_MOTION	"not RELATIVE or ABSOLUTE mouse move"
-
 // the color / depth / stencil bits of the window gfx creates (R8G8B8A8 + D24S8)
 #define GFX_COLOR_BITS		24
 #define GFX_DEPTH_BITS		24
@@ -44,9 +41,7 @@ cvar_t *r_preferOpenGLES;
 ===============
 GfxGLimp_Error
 
-gfx's own error reports, routed to the console. gfx's win32 window reports each raw mouse input
-without motion (a button or the wheel while the cursor is grabbed) as an error; that one goes to
-the developer console, or every click in game would print a warning (GFX_STATUS.md, gfx gaps).
+gfx's own error reports, routed to the console as warnings.
 ===============
 */
 static void GfxGLimp_Error( const char *fmt, ... )
@@ -57,12 +52,6 @@ static void GfxGLimp_Error( const char *fmt, ... )
 	va_start( argptr, fmt );
 	Q_vsnprintf( msg, sizeof( msg ), fmt, argptr );
 	va_end( argptr );
-
-	if( !Q_strncmp( msg, GFX_RAW_INPUT_NO_MOTION, strlen( GFX_RAW_INPUT_NO_MOTION ) ) )
-	{
-		ri.Printf( PRINT_DEVELOPER, "gfx: %s\n", msg );
-		return;
-	}
 
 	ri.Printf( PRINT_WARNING, "gfx: %s\n", msg );
 }
