@@ -11,19 +11,18 @@ This file is the current snapshot; the history is in git.
 The x11 window is Linux only and not built or run here (no Linux machine, no WSL). Phase 7
 (renderergl2 features) is only done when asked. Merging `gfx` into `main` is the user's decision.
 
-**Last run:** steps 1-3 of the recommended gfx fixes, each made in gfx (`gfx_dll/gfx`, the same
-in `gfx_benilla` where it applied and in wc_clean_new's `lib/gfx`) with the matching change here,
-one commit each ("Fixed in gfx"): (1) the win32 window's characters and raw-input message -
-`GfxGLimp_Error`'s filter is gone; injected input on the win32 window typed `å ä ö § €` into the
-console, clicks and the wheel while grabbed printed nothing at `developer 1`; (2) the vk VMA leak -
-on vk / sdl with the Khronos validation layer (`devmap q3dm0`, `vid_restart`, quit)
-VUID-vkDestroyDevice-device-05137 is gone, no leak reported, no TDR; (3) the sdl window's mouse
-buttons - `IN_GfxButtonToQ3Key`'s sdl-window renumbering is gone; injected X1 / X2 give K_MOUSE4 /
-K_MOUSE5 on the sdl, glfw and win32 windows. build_gfx rebuilt after each step.
+**Last run:** ioq3-rs gap 27 fixed in gfx ("Fixed in gfx"): the vk device signals and presents
+with one semaphore per swapchain image. No ioq3 code change. build_gfx rebuilt; vk on the sdl,
+glfw and win32 windows with the Khronos validation layer - `devmap q3dm0`, two window resizes
+(swapchain recreations), `vid_restart`, quit - logged no validation message at all, no TDR. Before
+it: steps 1-3 of the recommended gfx fixes (the win32 characters and raw-input message, the vk VMA
+leak, the sdl window's mouse buttons).
 
 **Next:** nothing in phases 0-6. Possible follow-ups, none required: the x11 window and the
 Linux build on a Linux machine (`cmake/gfx.cmake`'s Linux branch follows gfx's CMakeLists.txt),
-gfx fix step 4 (read back, gap 3) once gfx has it, phase 7 when asked.
+gfx fix step 4 (read back, gap 3) and the other gfx gaps below once gfx has them (the win32
+window's size, ioq3-rs gaps 9 and 28, would drop the client-rectangle workaround), phase 7 when
+asked.
 
 ## Phases
 
@@ -287,7 +286,7 @@ included. The x11 window and the Linux build are untested here (no Linux machine
 | gles3 | q3dm0 + timedemo (a little darker: `shaders_gles3_dark`) | q3dm0 (plain shaders) | q3dm0 (darker, as sdl) |
 | d3d11 | uses win32 (gfx makes D3D only there; console message) | uses win32 | q3dm0 + timedemo |
 | d3d12 | uses win32 | uses win32 | q3dm0 + timedemo (no debug layer: Graphics Tools missing) |
-| vk | q3dm0 + timedemo, validation layer clean of renderer_gfx | q3dm0, same | q3dm0, same |
+| vk | q3dm0 + timedemo, validation layer clean | q3dm0, same | q3dm0, same |
 
 `vid_restart` switches devices and windows at run time (checked gl4 / sdl -> d3d11 / win32 -> vk
 / sdl -> gles3 / glfw -> gl4 / sdl in one map, with the validation layer on).
@@ -326,8 +325,6 @@ so the rest are expected here too):
   rebased); 21 (no `invariant` / `precise`: one program); 22 (no push constants: a ring write and
   `gfx_bind_constant` per uniform change); 23 (GL clip depth on D3D / Vulkan: remapped in
   generic.vs); 24 (d3d11's WRITE_DISCARD per write: one-draw buffers).
-- ioq3-rs gap 27: the vk swapchain reuses its semaphores per frame in flight, not per swapchain
-  image - VUID-vkQueueSubmit-pSignalSemaphores-00067 once per vk start, on every window.
 
 New here (ioq3-rs has the same behaviour, unrecorded):
 
@@ -343,8 +340,8 @@ redefined), as gfx's own build does.
 
 ### Fixed in gfx
 
-Found here, fixed in gfx's sources (`gfx_dll/gfx`, and the same in `gfx_benilla` and
-wc_clean_new's `lib/gfx` copy), so ioq3-rs's gfx.dll gets them too once rebuilt:
+Found here or by ioq3-rs, fixed in gfx's sources (`gfx_dll/gfx`, and the same in `gfx_benilla`
+and wc_clean_new's `lib/gfx` copy), so ioq3-rs's gfx.dll gets them too once rebuilt:
 
 - **Step 1** (gfx `ed29d8f`): the win32 window decodes WM_CHAR through the ANSI code page - its
   window class is ANSI (`RegisterClassExA`), so `wparam` is a code-page byte, not a UTF-16 unit
@@ -368,6 +365,12 @@ wc_clean_new's `lib/gfx` copy), so ioq3-rs's gfx.dll gets them too once rebuilt:
   with no change (it gave K_MOUSE5 there). Other gfx programs reading side buttons on the sdl
   window see them one lower (the wow clients name them by gfx's enum, so X1 is "Button4" on
   every window now; gfx_benilla's sdl window already numbered them so).
+- **ioq3-rs gap 27** (gfx `e078365`): the vk device signals the submit and waits in the present
+  with one semaphore per swapchain image (`present_semaphores`, indexed by the acquired image;
+  made with the swapchain, kept and grown across recreations, destroyed in `vk_dtr`) instead of a
+  render-finished semaphore per frame in flight, which the present engine could still hold - the
+  validation layer's VUID-vkQueueSubmit-pSignalSemaphores-00067 at every vk start is gone, so a
+  vk run with the layer now logs nothing.
 
 ### Recommended order for the gfx fixes
 

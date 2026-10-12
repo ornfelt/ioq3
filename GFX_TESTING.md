@@ -131,8 +131,8 @@ after the same feature works on gl4, and then:
   Remove-Item Env:VK_ADD_LAYER_PATH, Env:VK_INSTANCE_LAYERS, Env:VK_KHRONOS_VALIDATION_LOG_FILENAME
   ```
 
-  One message is gfx's and expected once per vk start (GFX_STATUS.md, gfx gaps):
-  `VUID-vkQueueSubmit-pSignalSemaphores-00067`. Anything else is new - stop and look. D3D12's debug layer needs Windows'
+  A run logs no message (gfx's last one, `VUID-vkQueueSubmit-pSignalSemaphores-00067`, is fixed:
+  GFX_STATUS.md, Fixed in gfx). Any message is new - stop and look. D3D12's debug layer needs Windows'
   Graphics Tools (`d3d12SDKLayers.dll`), not installed here, and a Debug build (gfx asks for it
   only without `NDEBUG`);
 - keep runs short and scripted (`+quit` after a few hundred frames), one at a time, and stop at
