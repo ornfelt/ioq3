@@ -24,7 +24,7 @@ devices and windows with `vid_restart`; a timedemo on every device; no driver re
 
 **Next:** nothing in phases 0-6. Possible follow-ups, none required: the x11 window and the
 Linux build on a Linux machine (`cmake/gfx.cmake`'s Linux branch follows gfx's CMakeLists.txt),
-the gfx gaps below once gfx has them (e.g. a depth read back for flares, gap 3), phase 7 when
+the gfx gaps below once gfx has them (in the recommended order under "gfx gaps"), phase 7 when
 asked.
 
 ## Phases
@@ -365,6 +365,42 @@ the whole C API) and gap 8 (only a Debug gfx in the gfx tree - gfx is compiled h
 configuration). Compiling gfx's sources gives gfx's own `/W3` warnings (C4244 / C4267
 conversions, `HAVE_STDINT_H` redefined by `config.h`, `NDEBUG` redefined in `gl4.c`, `APIENTRY`
 redefined), as gfx's own build does.
+
+### Recommended order for the gfx fixes
+
+All of these are in gfx's shared sources, so ioq3-rs's gfx.dll has them too (only gap 3 is in
+its `GFX_STATUS.md`); one fix in gfx serves both ioq3 versions. Cheapest and safest first:
+
+1. **The win32 characters and the raw-input message** - not breaking. `windows/win32.c:663`:
+   `char tmp[2]` as `unsigned char` (or decode `wparam` as one UTF-16 unit) lets `å ä ö §`
+   through - what callers already expect; characters outside the BMP still need surrogate
+   pairing (unchanged). `windows/win32.c:522`: a raw input without motion is skipped quietly
+   instead of `GFX_ERROR`. renderer_gfx's `GfxGLimp_Error` filter then has nothing to filter
+   (harmless, can go).
+2. **The vk VMA leak** - `vmaDestroyAllocator` in `vk_dtr` before `DestroyDevice`
+   (`devices/vk.c`). Not breaking only with care: without `NDEBUG`, VMA's `VMA_ASSERT_LEAK` is
+   `assert` (`vk_mem_alloc.h`), so a program that destroys the device with gfx objects still
+   alive - or gfx itself, if an internal allocation outlives `vk_dtr` (not checked) - would abort
+   where today it leaks; ioq3-rs runs a Debug gfx.dll (its gap 8). Define `VMA_ASSERT_LEAK` to
+   report through `GFX_ERROR` before including VMA, then check ioq3 and ioq3-rs once on vk with the
+   validation layer (`vid_restart` and quit). renderer_gfx deletes every gfx object before the
+   device.
+3. **The sdl window's mouse buttons** - breaking, so coordinated. Only the sdl window is out of
+   line: `windows/sdl.c`'s `get_button` returns SDL's number (X1 = 4 = `GFX_MOUSE_BUTTON_5`),
+   where glfw, win32 and x11 give X1 = `GFX_MOUSE_BUTTON_4`; the fix is one line there (one less
+   past middle). It fixes ioq3-rs as it is, but `IN_GfxButtonToQ3Key`'s `gfxInput.sdlWindow`
+   case (gfx_input.c) must go in the same step - else the sdl window's X1 becomes SDL button 3,
+   which the K_AUX formula turns into a key below K_AUX1 - and other gfx programs reading side
+   buttons on the sdl window shift by one.
+4. **Read back (gap 3)** - not breaking (a new function), but the most work: every device, a
+   gfx.dll export, ioq3-rs's bindings. On Windows it only gains flares' depth test (`r_flares`,
+   off by default), as color comes from the screen; on Linux screenshots and video capture get
+   zeros, so with a Linux build next, color read back goes before step 2.
+
+Not recommended: making `gfx_set_mouse_position` take window coordinates on win32. It breaks
+callers passing screen coordinates, gfx's own included (`gfx_win32_ungrab_cursor` converts to
+screen coordinates first; the d3d / gl_win32 / vk_win32 wrappers forward to it), to fix
+something no caller here hits - document the difference instead.
 
 ## Open problems / accepted differences from renderer_opengl1
 
