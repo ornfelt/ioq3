@@ -11,20 +11,20 @@ This file is the current snapshot; the history is in git.
 The x11 window is Linux only and not built or run here (no Linux machine, no WSL). Phase 7
 (renderergl2 features) is only done when asked. Merging `gfx` into `main` is the user's decision.
 
-**Last run:** ioq3-rs gap 28 fixed in gfx ("Fixed in gfx"): windows open inside the work area -
-glfw's frame fitted to it and centred (r_mode 4: 1255x941 client, frame y 26-999 on a 1032-pixel
-work area; it was 1307x980 with the frame to y 1064, under the taskbar), win32 centred in the
-work area (frame y 26-999), sdl unchanged (inside already). With it, a follow-up to gap 9: the
-win32 window reports its creation size as a resize event when shown again. No ioq3 code change.
-build_gfx rebuilt; checked with a test program on the static gfx (sizes, placements, the resize
-events) and in the game (placements on all three windows, a q3dm1 screenshot on glfw with the
-whole HUD, phase 2's input check on glfw). Before it: gaps 9 and 27, steps 1-3 of the recommended
-gfx fixes.
+**Last run:** three more gfx fixes ("Fixed in gfx"), no ioq3 code change: ioq3-rs gap 26 (a vk
+device that fails to initialize falls back to gl4 instead of crashing - checked with SwiftShader
+refused as the only driver), gap 25 (vk takes a device without geometry shaders, so SwiftShader
+runs q3dm0, validation layer clean, and GFX_TESTING.md's GPU safety starts vk changes on it; the
+GPU is still chosen when both are there), and the win32 window's client size (it grows its
+client area like glfw: r_mode 4 is 1255x941 on both; the win32 / glfw desktop-sized window is cut
+down to the work area, 1904x993, whole HUD visible). build_gfx rebuilt after each; vk on the GPU
+with the validation layer clean, no TDR. Before them: gaps 28, 9, 27 and steps 1-3 of the
+recommended gfx fixes.
 
 **Next:** nothing in phases 0-6. Possible follow-ups, none required: the x11 window and the
 Linux build on a Linux machine (`cmake/gfx.cmake`'s Linux branch follows gfx's CMakeLists.txt),
-gfx fix step 4 (read back, gap 3) and the other gfx gaps below once gfx has them, phase 7 when
-asked.
+the focus / minimize / key-up gaps (ioq3-rs 12-14, workarounds in gfx_input.c), gfx fix step 4
+(read back, gap 3) with a Linux build, phase 7 when asked.
 
 ## Phases
 
@@ -189,7 +189,8 @@ asked.
   real size: gfx makes its windows dpi aware and grows a small one to most of the work area, so
   glConfig takes the size gfx gave (`gfx sized the window to W H`, gfx's client area on every
   window). `r_fullscreen` and `r_mode -2` make a desktop-sized window (desktop size from
-  GetSystemMetrics on Windows, 640x480 elsewhere for now); toggling `r_fullscreen` runs
+  GetSystemMetrics on Windows, 640x480 elsewhere for now; the win32 / glfw windows cut it down to
+  the work area less their frame, 1904x993 here, the sdl window covers the screen); toggling `r_fullscreen` runs
   `vid_restart`; `r_swapInterval` applied at creation; `minimize` prints that gfx cannot. A D3D
   `r_gfxDevice` with another `r_gfxWindow` uses the win32 window (console message), as gfx makes
   D3D devices only there. A failed window falls back to the default backends (gl4 / sdl), then
@@ -383,8 +384,8 @@ and wc_clean_new's `lib/gfx` copy), so ioq3-rs's gfx.dll gets them too once rebu
   never below the size asked for) until its frame covers that 95%, centred in the work area and
   shown at the end of creation as before - 1255x941, frame y 26-999. The win32 window, centred on
   the whole screen, fitted only with a thin taskbar along the bottom; it is centred in the work
-  area now. A size asked for that is larger than the work area cannot fit; it keeps its title bar
-  inside. sdl's window was inside already and is unchanged.
+  area now. A size asked for that does not fit the work area is cut down to it (below, the win32
+  client size). sdl's window was inside already and is unchanged.
 - **ioq3-rs gap 26** (gfx `ee04d0f`): a vk device that fails to initialize is deleted instead of
   crashing the process. `vk_dtr` ran on the half-made device and called `DeviceWaitIdle` and the
   other device functions before `load_device_proc` had loaded them (a call through NULL), so
@@ -401,6 +402,19 @@ and wc_clean_new's `lib/gfx` copy), so ioq3-rs's gfx.dll gets them too once rebu
   vk draws q3dm0 (`devmap`, screenshot, `vid_restart`, quit) with the validation layer clean;
   with SwiftShader listed before the AMD driver the GPU is still chosen (1000 frames in 7.6 s,
   SwiftShader alone 39.5 s). So vk runs can start on the CPU now (GFX_TESTING.md, GPU safety).
+- **The win32 window's client size** (gfx `d426403`): the size asked for is the client area, as on
+  the sdl / glfw windows, and the client area is what grows (shape kept), the frame
+  (AdjustWindowRectEx) counted in the 95% of the work area as on glfw - it grew the outer size and
+  the frame came out of the client: r_mode 4 gave 1291x941 (1.37:1), now 1255x941 (4:3), glfw's
+  size and place. With it the win32 and glfw windows cut a size that does not fit the work area
+  with its frame (`r_fullscreen` / `r_mode -2`'s desktop-sized window) down to it: the system cut
+  only the height to the screen and the frame pushed the client's bottom rows off the screen and
+  under the taskbar (1920x1080 asked: 1920x1061 client to y 1092; before the client-size change
+  win32 had 1904x1041 to y 1072), now 1904x993 inside the work area. Checked with a test program
+  (win32 and glfw give the same size and place for 800x600, 1600x900, 1280x1024, 1920x1080,
+  3840x2160) and in the game (gl4, d3d11, vk with the validation layer, the input check on win32;
+  `r_mode -2` on win32 and glfw with the whole HUD in the screenshot). The timedemo row "gl4,
+  win32 window" below was measured at the old 1904x1041.
 
 ### Recommended order for the gfx fixes
 
