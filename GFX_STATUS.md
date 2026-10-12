@@ -11,17 +11,20 @@ This file is the current snapshot; the history is in git.
 The x11 window is Linux only and not built or run here (no Linux machine, no WSL). Phase 7
 (renderergl2 features) is only done when asked. Merging `gfx` into `main` is the user's decision.
 
-**Last run:** ioq3-rs gap 9 fixed in gfx ("Fixed in gfx"): the win32 window reports its client
-area from the start, so `GfxGLimp_Win32ClientSize` is gone and glConfig takes gfx's size on every
-window. build_gfx rebuilt; on the win32 window (r_mode 4) gl4, vk (validation layer clean, no TDR),
-d3d11 and d3d12 print `gfx sized the window to 1291 941`, the client area Windows reports and the
-screenshot's size; phase 2's input check passes there. Before it: gap 27 and steps 1-3 of the
-recommended gfx fixes.
+**Last run:** ioq3-rs gap 28 fixed in gfx ("Fixed in gfx"): windows open inside the work area -
+glfw's frame fitted to it and centred (r_mode 4: 1255x941 client, frame y 26-999 on a 1032-pixel
+work area; it was 1307x980 with the frame to y 1064, under the taskbar), win32 centred in the
+work area (frame y 26-999), sdl unchanged (inside already). With it, a follow-up to gap 9: the
+win32 window reports its creation size as a resize event when shown again. No ioq3 code change.
+build_gfx rebuilt; checked with a test program on the static gfx (sizes, placements, the resize
+events) and in the game (placements on all three windows, a q3dm1 screenshot on glfw with the
+whole HUD, phase 2's input check on glfw). Before it: gaps 9 and 27, steps 1-3 of the recommended
+gfx fixes.
 
 **Next:** nothing in phases 0-6. Possible follow-ups, none required: the x11 window and the
 Linux build on a Linux machine (`cmake/gfx.cmake`'s Linux branch follows gfx's CMakeLists.txt),
-gfx fix step 4 (read back, gap 3) and the other gfx gaps below once gfx has them (ioq3-rs gap 28,
-the win32 / glfw windows grown past the work area, is the cheapest), phase 7 when asked.
+gfx fix step 4 (read back, gap 3) and the other gfx gaps below once gfx has them, phase 7 when
+asked.
 
 ## Phases
 
@@ -310,9 +313,6 @@ so the rest are expected here too):
 - ioq3-rs gap 13: no minimize / restore event (win32's 0x0 resize is used).
 - ioq3-rs gap 14: no key ups on focus loss, a key held over it comes back as KEY_PRESS
   (workaround in gfx_input.c).
-- ioq3-rs gap 28, seen on glfw too: at r_mode 4 the glfw window's client area (1307x980) runs
-  under the taskbar - a screen capture of it shows the taskbar over its bottom rows. ioq3-rs
-  recorded this for the win32 window only.
 - Worked around by design since phase 3, as in ioq3-rs (not each seen failing here): gaps 4
   (no depth bias) and 5 (no clip planes) - in the shaders; 16 (sampling fixed at texture
   creation); 17 (no GL_SRC_ALPHA_SATURATE); 18 (`gfx_set_texture_data` takes whole rows); 19
@@ -371,7 +371,20 @@ and wc_clean_new's `lib/gfx` copy), so ioq3-rs's gfx.dll gets them too once rebu
   `gfx_window_get_width` / `_height` give it before the window is shown, as the sdl / glfw
   windows do - they gave the size asked for (r_mode 4: 800x600 for a 1291x941 client) until the
   first WM_SIZE at show. `GfxGLimp_Win32ClientSize`, the client rectangle read from Windows, is
-  gone (the window lookup stays for glReadPixels' screen read).
+  gone (the window lookup stays for glReadPixels' screen read). Follow-up (gfx `5d99e25`): taking
+  the size at creation left the first show's WM_SIZE without a change, so the resize event the
+  win32 window sent then was gone - callers keeping their own size rely on it (wc_clean_new's
+  render size); it is sent when the window is shown, or at the first event pump for a handler set
+  later, as the sdl / glfw windows do. ioq3 ignores it (the size it already has).
+- **ioq3-rs gap 28** (gfx `48fc2d3`, seen here on glfw): windows open inside the monitor's work
+  area. The glfw window grew its client area to 95% of the work area, its frame came on top and
+  the system's cascade placed it, so at r_mode 4 its bottom rows ran under the taskbar (1307x980
+  client, frame to y 1064 on a 1032-pixel work area); it is now made hidden, shrunk (shape kept,
+  never below the size asked for) until its frame covers that 95%, centred in the work area and
+  shown at the end of creation as before - 1255x941, frame y 26-999. The win32 window, centred on
+  the whole screen, fitted only with a thin taskbar along the bottom; it is centred in the work
+  area now. A size asked for that is larger than the work area cannot fit; it keeps its title bar
+  inside. sdl's window was inside already and is unchanged.
 
 ### Recommended order for the gfx fixes
 
