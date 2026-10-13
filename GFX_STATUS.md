@@ -8,12 +8,26 @@ This file is the current snapshot; the history is in git.
 
 **Done.** Phases 0-6 are complete on Windows: every device and window gfx builds here works
 (Backends), a full game on gl4 matches renderer_opengl1, and gl4 is as fast as renderer_opengl1.
-The x11 window is Linux only and not built or run here (no Linux machine, no WSL). Phase 7
-(renderergl2 features) is only done when asked. Merging `gfx` into `main` is the user's decision.
+On Linux (Debian 13, X11, an AMD Renoir with Mesa) both configurations build and every device gfx
+builds there runs on the sdl, glfw and x11 windows (Backends (Linux)), within 5-15% of
+renderer_opengl1. Phase 7 (renderergl2 features) is only done when asked. Merging `gfx` into
+`main` is the user's decision.
 
-**Last run:** ioq3-rs gaps 29 and 30 fixed in gfx ("Fixed in gfx"): a minimize no longer crashes vk
-or logs a d3d11 error, and d3d12 in borderless fullscreen is no longer held to the refresh. Before
-it: ioq3-rs gaps 2 and 10 fixed in gfx ("Fixed in gfx"): GLimp_SetGamma gives the
+**Last run:** the first Linux run, and gfx fix step 4 (Recommended order): the x11 window's minimize /
+restore events, and the rest the win32, glfw and sdl windows have and x11 had not ("Fixed in gfx",
+"x11 window and Linux"): `minimize`, borderless fullscreen, a gamma ramp; on the way, Linux fixes
+in the other windows and devices - the sdl GL window drew with 2x MSAA (sdl gl4 timedemo 492 ->
+826 fps), the sdl window's gamma ramp did nothing on x11, glfw had no ramp on a monitor whose ramp
+is not 256 entries and gave the old size after `r_fullscreen`, vk was held back by Mesa's
+IMMEDIATE present (683 -> 809 fps). No ioq3 code changed. Checked: both configurations build;
+`devmap q3dm1` on gl4 / gl3 / gles3 / vk on the sdl, glfw and x11 windows (vk on lavapipe first,
+validation layer clean, no GPU reset); fullscreen on x11 / glfw at 1920x1080 at once; the ramp
+sampled from outside (applied, taken off on a focus loss, back on focus, the monitor's own ramp
+byte for byte after the exit); minimize / restore under awesome in a nested Xephyr (dwm here
+ignores iconify requests) giving `com_minimized` 0 -> 1 -> 0 on all three windows, vk too; a
+Linux timedemo matrix (Performance). Before it: ioq3-rs gaps 29 and 30 fixed in gfx ("Fixed in
+gfx"): a minimize no longer crashes vk or logs a d3d11 error, and d3d12 in borderless fullscreen
+is no longer held to the refresh. Before that: ioq3-rs gaps 2 and 10 fixed in gfx ("Fixed in gfx"): GLimp_SetGamma gives the
 window's monitor the gamma ramp (win32, glfw, sdl; applied while the window has the focus, as
 SDL does), so `r_gamma` takes effect at once and fullscreen's overbright is in the ramp; qglClear
 clears the depth or the stencil alone where only one is asked for. Checked on every window
@@ -24,10 +38,9 @@ at the monitor's 240 Hz), both fixed in gfx right after.
 Before it: gap 16 (`r_textureMode` at run time), gaps 1 (most) and 11, gap 24, gaps 12-14, the
 day's A/B timedemo, gaps 26, 25, the win32 client size, 28, 9, 27 and steps 1-3.
 
-**Next:** nothing in phases 0-6. Possible follow-ups, none required: the x11 window and the
-Linux build on a Linux machine (`cmake/gfx.cmake`'s Linux branch follows gfx's CMakeLists.txt;
-gfx's x11 window has the focus helper but no minimize events or gamma ramp yet), gfx fix
-step 4 (read back, gap 3) with a Linux build, phase 7 when asked.
+**Next:** nothing in phases 0-6. Possible follow-ups, none required: gfx fix step 5 (read back, gap 3:
+on Linux `screenshot` / video capture are black), the
+desktop size on Linux (`r_mode -2` windowed is 640x480), phase 7 when asked.
 
 ## Phases
 
@@ -68,8 +81,8 @@ step 4 (read back, gap 3) with a Linux build, phase 7 when asked.
   Release at parity with renderer_opengl1 - done.
 - [x] **6. All backends** - no new code. Every device on every window gfx makes it on, checked on
   q3dm0 (Backends) with the Khronos validation layer for vk and the TDR check after each GPU run;
-  device / window switches with `vid_restart`; timedemo per device. x11 is Linux only - done on
-  Windows.
+  device / window switches with `vid_restart`; timedemo per device. On Linux: every device on the
+  sdl, glfw and x11 windows (Backends (Linux)).
 - [ ] 7. Optional, only when asked: renderergl2 features on gfx.
 
 ## Decisions
@@ -210,9 +223,10 @@ step 4 (read back, gap 3) with a Linux build, phase 7 when asked.
   per entry, Windows' clamp, never decreasing. gfx applies it while the window has the focus and
   puts the monitor's own ramp back on a focus loss and when the window is deleted, as SDL does.
   With `r_ignorehwgamma 0` that is `deviceSupportsGamma` on every window with a ramp (win32,
-  glfw, sdl): `r_gamma` takes effect at once, and fullscreen's overbright bits are in the ramp,
-  as with renderer_opengl1. Without a ramp (the x11 window, or a ramp the system refuses: a
-  developer note) the workaround from before stays: `deviceSupportsGamma` only with `r_gamma 1`
+  glfw, sdl, and x11 since its fix; on Linux the monitor's xrandr crtc ramp): `r_gamma` takes
+  effect at once, and fullscreen's overbright bits are in the ramp, as with renderer_opengl1.
+  Without a ramp (a ramp the system refuses, or no xrandr: a developer note) the workaround from
+  before stays: `deviceSupportsGamma` only with `r_gamma 1`
   and `r_ignorehwgamma 0`; GLimp_SetGamma keeps the ramp's overbright shift
   (`gfxGl.overbrightPasses`; any other ramp: a note that `r_gamma` needs `vid_restart`, and
   `tr.overbrightBits`). GLimp_EndFrame applies it before the swap (`GfxGL_Overbright`, as
@@ -284,7 +298,10 @@ step 4 (read back, gap 3) with a Linux build, phase 7 when asked.
   error naming the paths tried.
 - **Builds** go to `build_gfx` (`USE_GFX` on) and `build_nogfx` (off), `build/` is main's. Only
   Visual Studio 18 2026 is installed here, so the generator is `-G "Visual Studio 18 2026" -A x64`
-  (the skill's commands name VS 17 2022).
+  (the skill's commands name VS 17 2022). On Linux, Makefiles with `-DCMAKE_BUILD_TYPE=Release`:
+  the client lands in `build_gfx/Release/` (gcc 14; renderer_gfx's files add two notes there,
+  `-Wsuggest-attribute=format` on GfxGLimp_Error and `-Wcomment` for the `shaders/*.gfxs`
+  in gfx_shader.c's head comment, both harmless). The QVM JIT works on Linux (no `vm_* 1` needed).
 
 ## Backends (Windows; this gfx build has devices gl3 gl4 gles3 vk d3d11 d3d12, windows win32 glfw sdl)
 
@@ -310,6 +327,27 @@ included. The x11 window and the Linux build are untested here (no Linux machine
 `vid_restart` switches devices and windows at run time (checked gl4 / sdl -> d3d11 / win32 -> vk
 / sdl -> gles3 / glfw -> gl4 / sdl in one map, with the validation layer on).
 
+## Backends (Linux; devices gl3 gl4 gles3 vk, windows x11 glfw sdl)
+
+Debian 13, X11 with dwm (a tiling window manager), an AMD Renoir (Mesa 25 radeonsi / RADV), the
+system SDL2 2.32.4 and GLFW 3.4, a Release build. "q3dm1": `devmap q3dm1` draws like the Windows
+build, starts and quits cleanly; "fullscreen": `r_fullscreen 1` gives a 1920x1080 window drawn
+whole at once; "ramp": `r_gamma 1.5` reaches the monitor's crtc and the monitor's ramp is back
+after; "minimize": `minimize` and a restore from outside under awesome in a nested Xephyr give
+`com_minimized` 0 -> 1 -> 0. Screenshots were taken with ImageMagick's `import` of the window
+(renderer_gfx's own are black on Linux, gap 3). No GPU reset (dmesg) after any run.
+
+| | sdl | glfw | x11 |
+| --- | --- | --- | --- |
+| gl4 (baseline) | q3dm1, fullscreen, ramp, minimize, timedemo | same | same |
+| gl3 | q3dm1, timedemo | q3dm1, timedemo | q3dm1, timedemo |
+| gles3 | q3dm1, timedemo (plain shaders) | same | same |
+| vk | q3dm1, fullscreen, timedemo; validation layer clean (lavapipe, then RADV) | same | same, and minimize / restore on lavapipe |
+| d3d11 / d3d12 | not built (Windows only) | | |
+
+Windowed under dwm every gfx window is resized by the window manager right after it is made, and
+renderer_gfx keeps drawing at the size it had (Open problems; accepted).
+
 ## gfx gaps (for the gfx maintainer)
 
 Met here so far, each also in ioq3-rs's list (its `GFX_STATUS.md`, gaps 1-30, which are gfx's,
@@ -319,12 +357,13 @@ so the rest are expected here too):
   resolution), desktop size query or window position - fullscreen is borderless at the desktop's
   mode, and `r_mode -2` windowed still takes the desktop size from GetSystemMetrics (Windows) or
   640x480.
-- ioq3-rs gap 2, fixed in gfx (`4c3fdc8`) on the win32, glfw and sdl windows: the x11 window still
-  has no gamma ramp (there: overbright as end-of-frame blend passes, the `r_gamma` curve in the
-  textures).
+- ioq3-rs gap 2, fixed in gfx (`4c3fdc8`) on the win32, glfw and sdl windows, and on the x11
+  window by this run's fix ("x11 window and Linux").
 - ioq3-rs gap 3: no read back of the color or depth buffer (workaround on Windows: the color from
   the screen through GDI, one frame late and only what is visible; no depth, so `r_flares 1`'s
-  depth test reads zeros - one warning - and flares show only within ~28 units of the eye).
+  depth test reads zeros - one warning - and flares show only within ~28 units of the eye). On
+  Linux there is no workaround: `screenshot` / `screenshotJPEG` / video capture are black (`gfx:
+  no read back of this framebuffer` once).
 - Worked around by design since phase 3, as in ioq3-rs (not each seen failing here): gaps 4
   (no depth bias) and 5 (no clip planes) - in the shaders; 17 (no GL_SRC_ALPHA_SATURATE); 18 (`gfx_set_texture_data` takes whole rows); 19
   (unsynchronized stream buffers: rings sized for many frames); 20 (no base vertex: indices
@@ -514,19 +553,72 @@ and wc_clean_new's `lib/gfx` copy), so ioq3-rs's gfx.dll gets them too once rebu
   started with it (0.7% of the world region differs, against 12% before the change); the input
   check and the vk resize / `vid_restart` run as before.
 
+- **The x11 window and Linux** (ioq3-rs gaps 31-35; gfx step 4 of the Recommended order, found here
+  on the first Linux run; gfx `27a6e48`, `gfx_dll/gfx` and `gfx_benilla`; wc_clean_new's `lib/gfx`
+  copy in `6b5ead12`). The x11 window gets what the win32, glfw and sdl windows have:
+  - **Minimize / restore events**: it listens to its own property changes (it did not), and a
+    change of ICCCM's `WM_STATE` (IconicState, which the window manager sets when it iconifies)
+    or EWMH's `_NET_WM_STATE_HIDDEN` is `GFX_EVENT_MINIMIZE` / `_RESTORE` through
+    `gfx_window_minimize_event`; the window manager's unmap of an iconified window is no longer an
+    "unhandled event: 18" error. **`gfx_window_minimize`** asks the window manager to iconify
+    (`XIconifyWindow`; one without icons, as dwm here, ignores it).
+  - **Borderless fullscreen** (`gfx_window_set_mode`) as EWMH `_NET_WM_STATE_FULLSCREEN`, the way
+    sdl and glfw do it on x11 (gfx_benilla's design): the property before the window manager
+    maps the window, a client message after, refused with a gfx error where `_NET_SUPPORTED`
+    lacks it. The window manager resizes later, so the window gives the monitor's size (the
+    windowed one on the way back) at once, as the sdl window does, and the resize event still
+    comes when the server reports it (the event follows the server's size, not the one given
+    ahead). GfxGLimp_SetMode thus draws `r_fullscreen` at 1920x1080 on x11, where it drew a
+    640x480 frame in a tiled window.
+  - **A gamma ramp**: the monitor's xrandr crtc ramp (the crtc under the window's centre),
+    resampled from gfx's 256 entries to the crtc's (1024 here) and back; libXrandr is loaded at
+    run time like libX11 and optional. Shared as `struct gfx_x11_randr` / `gfx_x11_randr_*` in
+    x11.c, so the sdl window uses it too (below).
+  - **Focus as sdl's x11 backend reads it**: FocusIn / FocusOut of a grab (a global hotkey), of
+    a child, of the window under the pointer, or without a change are not focus changes - the
+    ramp follows the focus, so a stray FocusOut must not put the monitor's ramp back.
+  Found on the way, in the other Linux windows and devices:
+  - the sdl GL window asked for a sample buffer with 0 samples, and glx gave a 2x multisampled
+    visual: every sdl frame on gl3 / gl4 / gles3 was drawn with MSAA on Linux. Sample buffers
+    now only with samples asked for, as the x11 and win32 windows do (sdl gl4 timedemo 492 ->
+    826 fps, gl3 424 -> 729, gles3 420 -> 745; on Windows the pixel format may have been the
+    same - not re-measured there);
+  - the sdl window's ramp: sdl2's x11 driver sets one only in a DirectColor visual's colormap and
+    reported success without a change; on sdl's x11 driver the ramp now goes through xrandr
+    (`GFX_SDL_X11_GAMMA`: gfx's x11 code and `SDL_VIDEO_DRIVER_X11` both there);
+  - the glfw window's ramp: glfw takes only a ramp as long as the monitor's, and gfx only 256
+    entries, so on this 1024-entry crtc there was none; resampled now (shared
+    `gfx_gamma_ramp_resample` in window.c), unchanged where the monitor's is 256 (Windows);
+  - the glfw window's `set_mode` off Windows: on x11 the window manager resizes after
+    glfwSetWindowMonitor returns, so the size was the old one (renderer_gfx drew 1368x1026 in a
+    1920x1080 window); it gives the size asked for at once now, as on win32;
+  - vk with swap interval 0 off Windows prefers MAILBOX to IMMEDIATE: Mesa's x11 IMMEDIATE
+    presents a frame before the next one starts, MAILBOX from its own thread - both uncapped,
+    timedemo 683 -> 809 fps (RADV); Windows keeps IMMEDIATE (measured fastest there).
+  Checked with a test program on the gfx API (events and sizes printed with times) under dwm and
+  under awesome in a nested Xephyr, against gfx_dll's gfx (static, from this build) and
+  gfx_benilla's objects, and in the game (Backends (Linux)). Not changed: the x11 window does not
+  grow a small window to the work area as the others do (r_mode 4: 800x600 on x11, 1368x1026 on
+  sdl / glfw), and grabbed motion arrives as two half steps (the server sends each raw event
+  twice under a grab; gfx's 0.5 sensitivity makes the total the sdl / glfw one, 400 pixels for
+  four 100-pixel moves on each).
+
 ### Recommended order for the gfx fixes
 
 All of these are in gfx's shared sources, so ioq3-rs's gfx.dll has them too (only gap 3 was in
 its `GFX_STATUS.md`); one fix in gfx serves both ioq3 versions. Cheapest and safest first; steps
-1-3 are done, step 4 is open:
+1-4 are done, step 5 is open:
 
 1. **Done: the win32 characters and the raw-input message** (Fixed in gfx, step 1).
 2. **Done: the vk VMA leak** (Fixed in gfx, step 2).
 3. **Done: the sdl window's mouse buttons** (Fixed in gfx, step 3).
-4. **Read back (gap 3)** - not breaking (a new function), but the most work: every device, a
+4. **Done: the x11 window's minimize / restore events**, with `minimize`, borderless fullscreen
+   and a gamma ramp on x11, and the Linux fixes found on the way (Fixed in gfx, "The x11 window
+   and Linux"). No ioq3 or ioq3-rs change: both use the gfx calls already.
+5. **Read back (gap 3)** - not breaking (a new function), but the most work: every device, a
    gfx.dll export, ioq3-rs's bindings. On Windows it only gains flares' depth test (`r_flares`,
-   off by default), as color comes from the screen; on Linux screenshots and video capture get
-   zeros, so with a Linux build next, color read back comes first.
+   off by default), as color comes from the screen; on Linux screenshots and video capture are
+   black (checked), so color read back comes first there.
 
 Not recommended: making `gfx_set_mouse_position` take window coordinates on win32. It breaks
 callers passing screen coordinates, gfx's own included (`gfx_win32_ungrab_cursor` converts to
@@ -552,7 +644,22 @@ something no caller here hits - document the difference instead.
   Windows gles3 gamma fix to `shaders_gles3_dark` (glfw's gles3 uses the plain shaders), as in
   ioq3-rs.
 - d3d11 is a little slower than d3d12 / gl4 (856 fps against ~905-930 in Release timedemo).
-- Not checked: md4 / iqm models (baseq3 has none) and the x11 window (Linux).
+- Not checked: md4 / iqm models (baseq3 has none).
+- Linux, tiling window managers (ioq3-rs gap 36): dwm (here) resizes every new gfx window to its tile right after
+  it is made (1019x1014 here), and renderer_gfx keeps drawing at the size it had - a 800x600 frame
+  in a corner of the x11 window, the right and top of a 1368x1026 one cut off on sdl / glfw.
+  renderer_opengl1's SDL window is not resizable with `r_allowResize 0` (min = max size hints), so
+  dwm floats it at its size; gfx windows are always resizable and gfx has no way to make one
+  fixed before it is mapped (dwm decides at map time). Fullscreen is not affected. Accepted
+  (the user's call: the window manager setting the size is fine), so no fixed-size window in
+  gfx; were it wanted: a gfx window property for a fixed size set before the map (renderer_gfx
+  from `r_allowResize`), or renderer_gfx following the window's size. `r_allowResize 1` would
+  restart the renderer on the tile size, but the sdl / glfw windows grow a small window again
+  (95% of the work area), so it could keep restarting under dwm (not tried).
+- Linux: `r_mode -2` windowed is 640x480 (no desktop size there, ioq3-rs gap 1); `r_fullscreen`
+  gets the monitor's size from gfx (the x11 fix), so fullscreen is right.
+- Linux performance: gl4 is 5-7% behind renderer_opengl1 (both on Mesa radeonsi; on Windows they
+  are at parity), vk ~7%, gl3 / gles3 ~15% (Performance); no profiler here to look further.
 - Not ioq3-gfx: the RelWithDebInfo client (main's `build/` too) crashes with an access
   violation in JIT-compiled QVM code right after `ui.qvm` loads, whatever the renderer. Run
   with `+set vm_ui 1 +set vm_cgame 1 +set vm_game 1` (the interpreter) or the dll modules
@@ -651,3 +758,22 @@ within the same spread. No TDR. Gaps 12-14 came after this run; they touch only 
 Gap 24 (d3d11 stream buffers as rings), the same settings, desktop-sized win32 window, 5 runs each:
 d3d11 with the old one-draw buffers (new gfx, every write at offset 0 still discards) 701 - 714,
 mean 708; with the rings 841 - 872, mean 856 (+21%); d3d12 905, gl4 928 in the same session.
+
+### Linux
+
+The same timedemo (`demo four`, fullscreen at the monitor's 1920x1080, `r_swapInterval 0`,
+`com_maxfps 0`, the game modules as .so files) on Debian 13 / X11 / dwm, AMD Renoir (Mesa 25
+radeonsi, RADV), Release, the final gfx, one run per cell (repeats spread ±2%):
+
+| device | sdl | glfw | x11 |
+| --- | --- | --- | --- |
+| gl4 | 810 | 817 | 820 |
+| gl3 | 729 | 731 | 728 |
+| gles3 | 734 | 734 | 727 |
+| vk | 816 | 805 | 809 |
+| renderer_opengl1 (SDL) | 859 - 888 (5 runs) | | |
+
+Before this run's gfx fixes the sdl GL rows were 492 / 424 / 420 (2x MSAA) and vk 673 - 688 on
+every window (IMMEDIATE present); gl4 against renderer_opengl1 alternately, 3 runs each: 811 -
+821 against 863 - 888.
+

@@ -41,7 +41,7 @@ $B = "$env:code_root_dir/Code2/C/ioq3/build_gfx/RelWithDebInfo"
   JIT-compiled QVM code right after `ui.qvm` loads, whatever the renderer (GFX_STATUS.md, open
   problems).
 - `r_fullscreen` defaults to 1: borderless fullscreen on the monitor, at the desktop's mode (on
-  the win32, glfw and sdl windows). A screenshot reads the screen, so keep the game in front while
+  the win32, glfw, sdl and x11 windows). A screenshot reads the screen, so keep the game in front while
   it is taken (a covered window captures what covers it). `r_fullscreen 0 +set r_mode 4` gives a
   window; gfx grows a small window to most of the screen, so it ends up bigger than the mode
   (`gfx sized the window to W H` in the console).
@@ -160,7 +160,57 @@ after the same feature works on gl4, and then:
 
 ## Linux
 
-`cmake -S . -B build_gfx -DCMAKE_BUILD_TYPE=Release && cmake --build build_gfx` (and the same
-with `-DUSE_GFX=OFF` into `build_nogfx`). gfx's x11 window and the jkg device are compiled
-instead of the win32 / D3D ones, against the system SDL2 and GLFW (`find_package(glfw3)`).
-Untested so far: there is no Linux machine here.
+Built and run on Debian 13 (X11 with dwm, an AMD Renoir with Mesa radeonsi / RADV, the system SDL2
+and GLFW). Makefiles, one configuration per build folder:
+
+```bash
+W="$code_root_dir/Code2/C/ioq3"
+cmake -S "$W" -B "$W/build_gfx" -DCMAKE_BUILD_TYPE=Release && cmake --build "$W/build_gfx" -j16
+cmake -S "$W" -B "$W/build_nogfx" -DCMAKE_BUILD_TYPE=Release -DUSE_GFX=OFF && cmake --build "$W/build_nogfx" -j16
+mkdir -p "$W/build_gfx/Release/baseq3"
+for f in "$W"/build/Release/baseq3/pak*.pk3; do ln -f "$f" "$W/build_gfx/Release/baseq3/"; done
+```
+
+`build_gfx/Release/` holds `ioquake3`, the GL renderer `.so` files and `shaders/<dialect>/`. gfx's
+x11 window and the jkg device are compiled instead of the win32 / D3D ones. The QVM JIT works
+here, so no `vm_* 1`. gfx's `[gfx] using ...` lines show in the terminal.
+
+Run as on Windows with `/` paths and `r_gfxWindow x11` for the x11 window. What differs:
+
+- `screenshot` is black (no read back, GFX_STATUS.md gap 3). Capture the window instead (xdotool,
+  ImageMagick): `import -window "$(xdotool search --pid <pid> | tail -1)" shot.png`. With
+  `timeout` in front of the client, `<pid>` is the child's (`pgrep -P <timeout pid>`). A capture
+  has no monitor gamma ramp in it, as on Windows.
+- vk: the distribution's validation layer (`VK_INSTANCE_LAYERS=VK_LAYER_KHRONOS_validation`,
+  `VK_KHRONOS_VALIDATION_LOG_FILENAME=<file>`), lavapipe first
+  (`VK_DRIVER_FILES=/usr/share/vulkan/icd.d/lvp_icd.json`), then the GPU; `VK_LOADER_DEBUG=layer,driver`
+  shows that both were taken.
+- The gamma ramp is the monitor's xrandr crtc ramp. Save it before runs that change it (a short
+  XRandR program: XRRGetCrtcGamma / XRRSetCrtcGamma of the active crtc) and compare after; gfx puts
+  it back on a focus loss and at exit, but not after a crash.
+- Minimize needs a window manager that iconifies: dwm ignores the request. A nested X server with
+  one that does, without installing anything:
+
+  ```bash
+  mkdir -p /tmp/xephyr && cd /tmp/xephyr && apt-get download xserver-xephyr && dpkg -x xserver-xephyr_*.deb .
+  ./usr/bin/Xephyr :5 -screen 1280x800 -ac -noreset & sleep 2; DISPLAY=:5 awesome &
+  ```
+
+  Then run the client with `DISPLAY=:5` (llvmpipe GL 4.5, lavapipe vk) and a cfg that prints
+  `com_minimized`, runs `minimize`, waits and prints it again; restore from outside with
+  `DISPLAY=:5 xdotool windowactivate <window id>`. `com_minimized` goes 0 -> 1 -> 0 on the sdl,
+  glfw and x11 windows.
+- Windowed under a tiling window manager (dwm) the window is resized to its tile right away and
+  the frame keeps the old size (GFX_STATUS.md, open problems); use `r_fullscreen 1` there, or a
+  floating window manager.
+- Timedemo:
+
+  ```bash
+  R="$code_root_dir/Code2/C/ioq3/build_gfx/Release"; cd "$R"
+  for r in "+set cl_renderer gfx +set r_gfxWindow x11 +set r_gfxDevice gl4" "+set cl_renderer opengl1"; do
+      H=$(mktemp -d); ./ioquake3 +set fs_homepath "$H" +set logfile 2 +set sv_pure 0 +set vm_cgame 0 \
+          +set vm_ui 0 +set vm_game 0 +set r_fullscreen 1 +set r_mode -2 +set r_swapInterval 0 \
+          +set com_maxfps 0 $r +set timedemo 1 +set nextdemo quit +demo four > /dev/null 2>&1
+      grep fps "$H/baseq3/qconsole.log"; rm -rf "$H"
+  done
+  ```
