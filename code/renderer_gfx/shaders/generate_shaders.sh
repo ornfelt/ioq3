@@ -3,11 +3,9 @@
 # shaders` in bash, the same as generate_shaders.ps1).
 #
 # Every <name>.<vs|fs>.gfxs here is compiled with gfx's shader compiler (wc_compiler_rs) into
-# the four folders renderer_gfx loads, as <name>.<vs|fs>.gfx:
+# the three folders renderer_gfx loads, as <name>.<vs|fs>.gfx:
 #   shaders/             gl3, gl4, gles3
 #   shaders_d3/          d3d11 (d3d12 loads it too)
-#   shaders_gles3_dark/  gl3, gl4, gles3 compiled from a folder named so: the compiler then adds
-#                        its gamma fix for gles3 on Windows
 #   shaders_vk/          vk (SPIR-V; needs glslangValidator - GLSLANG_VALIDATOR, or
 #                        glslangValidator / glslang on PATH - else the folder is left as is)
 #
@@ -30,12 +28,11 @@ fi
 compiler_src="$code_root_dir/Code2/General/gfx/wc_compiler_rs/src/main.rs"
 compiler="$work_dir/wc_compiler_rs"
 
-# subfolder:backends:compiled from a folder named like the subfolder:needs glslang
+# subfolder:backends:needs glslang
 dialects=(
-	"shaders:gl3,gl4,gles3:0:0"
-	"shaders_d3:d3d11:0:0"
-	"shaders_gles3_dark:gl3,gl4,gles3:1:0"
-	"shaders_vk:vk:0:1"
+	"shaders:gl3,gl4,gles3:0"
+	"shaders_d3:d3d11:0"
+	"shaders_vk:vk:1"
 )
 
 glslang="${GLSLANG_VALIDATOR:-}"
@@ -56,7 +53,7 @@ compiled=0
 failed=0
 
 for dialect in "${dialects[@]}"; do
-	IFS=: read -r dir backends named_dir spirv <<< "$dialect"
+	IFS=: read -r dir backends spirv <<< "$dialect"
 
 	if [ "$spirv" = 1 ] && [ -z "$glslang" ]; then
 		echo -e "\e[33mglslangValidator not found (GLSLANG_VALIDATOR / PATH): $dir left as is\e[0m"
@@ -77,18 +74,7 @@ for dialect in "${dialects[@]}"; do
 		esac
 		output="$out_dir/${name%.gfxs}.gfx"
 
-		# the gles3_dark build reads its source by bare name from a folder named so
-		if [ "$named_dir" = 1 ]; then
-			cwd="$work_dir/$dir"
-			mkdir -p "$cwd"
-			cp "$source" "$cwd/"
-			input="$name"
-		else
-			cwd="$shaders_dir"
-			input="$source"
-		fi
-
-		if (cd "$cwd" && GLSLANG_VALIDATOR="$glslang" "$compiler" -t "$kind" -x "$backends" -i "$input" -o "$output"); then
+		if (cd "$shaders_dir" && GLSLANG_VALIDATOR="$glslang" "$compiler" -t "$kind" -x "$backends" -i "$source" -o "$output"); then
 			compiled=$((compiled + 1))
 			echo -e "\e[32m  $name -> $output\e[0m"
 		else

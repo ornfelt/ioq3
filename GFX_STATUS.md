@@ -285,12 +285,12 @@ desktop size on Linux (`r_mode -2` windowed is 640x480), phase 7 when asked.
   screenshots and video frames match renderer_opengl1's either way.
 - **Shaders.** `code/renderer_gfx/shaders/` is ioq3-rs's `shaders/` unchanged: `generic.vs.gfxs` /
   `generic.fs.gfxs` and the compiled `shaders/` (gl3, gl4, gles3), `shaders_d3/` (d3d11; d3d12
-  loads it), `shaders_gles3_dark/` (compiled from a folder named so: gfx's compiler adds its
-  Windows gles3 gamma fix), `shaders_vk/` (SPIR-V). `.gitattributes` marks `*.gfx` binary. A
-  post-build step of ioquake3 copies the four folders next to it as `shaders/<dialect>/` (ioq3-rs's
+  loads it), `shaders_vk/` (SPIR-V); gles3 uses `shaders/` on every window and OS.
+  `.gitattributes` marks `*.gfx` binary. A
+  post-build step of ioquake3 copies the three folders next to it as `shaders/<dialect>/` (ioq3-rs's
   dist layout; also installed). `generate_shaders.ps1` / `.sh` build `wc_compiler_rs` with rustc
   into `build_shaders/` and recompile every folder (vk only with glslangValidator); run with
-  ioq3-rs's glslang 16.6 they reproduce all 8 files byte for byte. `gfx_shader.c` (the port of
+  ioq3-rs's glslang 16.6 they reproduce all 6 files byte for byte. `gfx_shader.c` (the port of
   ioq3-rs's `gfx_shader.rs`) reads them from `shaders/<dialect>/` in the client's folder
   (`Sys_BinaryPath`, called directly: renderer_gfx is in the client), then under `fs_basepath` -
   where ioq3-rs's second folder is its workspace's `shaders/`, which the C build does not need, as
@@ -319,7 +319,7 @@ included. The x11 window and the Linux build are untested here (no Linux machine
 | --- | --- | --- | --- |
 | gl4 (baseline) | 2D + input + 3D + timedemo | 2D + input + q3dm0 | 2D + input + q3dm0 + timedemo |
 | gl3 | q3dm0 + timedemo | q3dm0 | q3dm0 |
-| gles3 | q3dm0 + timedemo (a little darker: `shaders_gles3_dark`) | q3dm0 (plain shaders) | q3dm0 (darker, as sdl) |
+| gles3 | q3dm0 + timedemo | q3dm0 | q3dm0 |
 | d3d11 | uses win32 (gfx makes D3D only there; console message) | uses win32 | q3dm0 + timedemo |
 | d3d12 | uses win32 | uses win32 | q3dm0 + timedemo (no debug layer: Graphics Tools missing) |
 | vk | q3dm0 + timedemo, validation layer clean | q3dm0, same | q3dm0, same |
@@ -640,9 +640,9 @@ something no caller here hits - document the difference instead.
 - `r_primitives 1` on renderer_gfx matches the default path and renderer_opengl1's default;
   renderer_opengl1's own `r_primitives 1` frame differs from its default on this AMD driver
   (darker, bluer lightmapped walls) - the driver's, not renderer_gfx's.
-- gles3 is a little darker than gl3 / gl4 on the sdl and win32 windows: gfx's compiler adds its
-  Windows gles3 gamma fix to `shaders_gles3_dark` (glfw's gles3 uses the plain shaders), as in
-  ioq3-rs.
+- gles3 uses the plain `shaders` on every window and OS, as in ioq3-rs: gfx's gles3 device turns
+  GL_FRAMEBUFFER_SRGB off (gfx 4af8e400), which ended the double sRGB encode on Windows that the
+  darker gles3 shader folder made up for.
 - d3d11 is a little slower than d3d12 / gl4 (856 fps against ~905-930 in Release timedemo).
 - Not checked: md4 / iqm models (baseq3 has none).
 - Linux, tiling window managers (ioq3-rs gap 36): dwm (here) resizes every new gfx window to its tile right after

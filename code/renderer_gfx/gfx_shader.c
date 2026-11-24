@@ -196,22 +196,15 @@ static const byte *GfxShader_Code( const gfxShaderFile_t *file, enum gfx_device_
 GfxShader_Subdir
 
 The compiled-shader folder for a device (gfx_demo's get_shader_subdir): shaders_vk, shaders_d3 for
-the D3D devices, shaders_gles3_dark for gles3 off Linux except on GLFW's window, and shaders (the
-gl3 / gl4 / gles3 code) otherwise
+the D3D devices, and shaders (the gl3 / gl4 / gles3 code) otherwise, on every window
 ===============
 */
 static const char *GfxShader_Subdir( enum gfx_device_backend device, enum gfx_window_backend window )
 {
+	(void)window;
 	switch ( device ) {
 	case GFX_DEVICE_VK:
 		return "shaders_vk";
-	case GFX_DEVICE_GLES3:
-#ifndef __linux__
-		if ( window != GFX_WINDOW_GLFW ) {
-			return "shaders_gles3_dark";
-		}
-#endif
-		return "shaders";
 	case GFX_DEVICE_D3D9:
 	case GFX_DEVICE_D3D11:
 	case GFX_DEVICE_D3D12:

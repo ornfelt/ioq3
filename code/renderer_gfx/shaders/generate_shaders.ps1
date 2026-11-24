@@ -2,11 +2,9 @@
 # shaders` in PowerShell).
 #
 # Every <name>.<vs|fs>.gfxs here is compiled with gfx's shader compiler (wc_compiler_rs) into
-# the four folders renderer_gfx loads, as <name>.<vs|fs>.gfx:
+# the three folders renderer_gfx loads, as <name>.<vs|fs>.gfx:
 #   shaders/             gl3, gl4, gles3
 #   shaders_d3/          d3d11 (d3d12 loads it too)
-#   shaders_gles3_dark/  gl3, gl4, gles3 compiled from a folder named so: the compiler then adds
-#                        its gamma fix for gles3 on Windows
 #   shaders_vk/          vk (SPIR-V; needs glslangValidator - GLSLANG_VALIDATOR, or
 #                        glslangValidator / glslang on PATH - else the folder is left as is)
 #
@@ -29,12 +27,11 @@ if (-not $env:code_root_dir) {
 $CompilerSrc = Join-Path $env:code_root_dir "Code2/General/gfx/wc_compiler_rs/src/main.rs"
 $Compiler = Join-Path $WorkDir "wc_compiler_rs.exe"
 
-# subfolder, -x backends, compiled from a folder named like the subfolder, needs glslang
+# subfolder, -x backends, needs glslang
 $Dialects = @(
-	@{ Dir = "shaders";            Backends = "gl3,gl4,gles3"; NamedDir = $false; SpirV = $false },
-	@{ Dir = "shaders_d3";         Backends = "d3d11";         NamedDir = $false; SpirV = $false },
-	@{ Dir = "shaders_gles3_dark"; Backends = "gl3,gl4,gles3"; NamedDir = $true;  SpirV = $false },
-	@{ Dir = "shaders_vk";         Backends = "vk";            NamedDir = $false; SpirV = $true }
+	@{ Dir = "shaders";    Backends = "gl3,gl4,gles3"; SpirV = $false },
+	@{ Dir = "shaders_d3"; Backends = "d3d11";         SpirV = $false },
+	@{ Dir = "shaders_vk"; Backends = "vk";            SpirV = $true }
 )
 
 $Glslang = $env:GLSLANG_VALIDATOR
@@ -76,20 +73,9 @@ foreach ($dialect in $Dialects) {
 		$kind = $Matches[1]
 		$output = Join-Path $outDir ($source.BaseName + ".gfx")
 
-		# the gles3_dark build reads its source by bare name from a folder named so
-		if ($dialect.NamedDir) {
-			$cwd = Join-Path $WorkDir $dialect.Dir
-			New-Item -ItemType Directory -Force $cwd | Out-Null
-			Copy-Item $source.FullName $cwd -Force
-			$input_ = $source.Name
-		} else {
-			$cwd = $ShadersDir
-			$input_ = $source.FullName
-		}
-
 		if ($dialect.SpirV) { $env:GLSLANG_VALIDATOR = $Glslang }
-		Push-Location $cwd
-		& $Compiler -t $kind -x $dialect.Backends -i $input_ -o $output
+		Push-Location $ShadersDir
+		& $Compiler -t $kind -x $dialect.Backends -i $source.FullName -o $output
 		$ok = $LASTEXITCODE -eq 0
 		Pop-Location
 

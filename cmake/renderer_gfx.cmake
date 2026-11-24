@@ -71,7 +71,7 @@ target_link_libraries(      ${CLIENT_BINARY} PRIVATE ${RENDERER_GFX_BINARY} gfx)
 
 # the compiled shaders next to the client, as shaders/<dialect>/
 set(RENDERER_GFX_SHADERS_DIR ${SOURCE_DIR}/renderer_gfx/shaders)
-set(RENDERER_GFX_SHADER_DIALECTS shaders shaders_d3 shaders_gles3_dark shaders_vk)
+set(RENDERER_GFX_SHADER_DIALECTS shaders shaders_d3 shaders_vk)
 
 foreach(DIALECT IN LISTS RENDERER_GFX_SHADER_DIALECTS)
     add_custom_command(TARGET ${CLIENT_BINARY} POST_BUILD

@@ -66,8 +66,8 @@ $B = "$env:code_root_dir/Code2/C/ioq3/build_gfx/RelWithDebInfo"
   when redirected (`Start-Process -RedirectStandardOutput`).
 - **GL4 first.** Every feature is checked on gl4 before any other device; vk and d3d12 then only
   as "Vulkan and D3D12: GPU safety" says. What works where is GFX_STATUS.md's Backends table.
-- gles3 is a little darker than gl3 / gl4 on the sdl and win32 windows (`shaders_gles3_dark`,
-  gfx's Windows gles3 gamma fix); glfw's gles3 uses the plain shaders.
+- gles3 uses the plain `shaders` on every window and OS (gfx's gles3 device turns
+  GL_FRAMEBUFFER_SRGB off, so there is no double sRGB encode to make up for).
 
 ## Scripted checks
 
